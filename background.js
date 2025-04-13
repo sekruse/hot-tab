@@ -74,6 +74,7 @@ async function focusTab(args) {
     pinnedTab = await chrome.tabs.get(pin.tabId);
   } catch (error) {
     pinnedTab = await resurrectTab(pin);
+    await setPin(args.key, pinnedTab);
   }
   const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
   if (currentTab.id === pinnedTab.id) {
@@ -99,6 +100,7 @@ async function summonTab(args) {
     pinnedTab = await chrome.tabs.get(pin.tabId);
   } catch (error) {
     pinnedTab = await resurrectTab(pin);
+    await setPin(args.key, pinnedTab);
   }
   const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
   if (currentTab.id === pinnedTab.id) {
