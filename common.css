@@ -18,6 +18,10 @@ li {
   border-radius: 3px;
   background-color: Lightgrey;
   padding: 3px 5px;
+  display: inline-block;
+}
+.small-font {
+  font-size: 60%;
 }
 .icon {
   height: 20px;
