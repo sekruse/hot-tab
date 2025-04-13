@@ -28,3 +28,5 @@ Now if you need to get to a previously pinned tab, it's just a shortcut plus a p
 * If you'd like to go back to a previously pinned tab, press `<shortcut>` followed by `<key>`.
 
 * If you'd like to move a previously pinned tab to the current window and make it the active tab, then press `<shortcut>` followed by `<Shift>` + `<key>`.
+
+* Finally, to remove a pin press `<shortcut>` followed by `<Alt>` + `<key>`.

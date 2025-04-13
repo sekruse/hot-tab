@@ -119,6 +119,9 @@ async function summonTab(args) {
 
 const messageHandlers = {
   'pinTab': pinTab,
+  'removePin': async (args) => {
+    await removePin(args.key);
+  },
   'focusTab': focusTab,
   'summonTab': summonTab,
   'listPins': listPins,
