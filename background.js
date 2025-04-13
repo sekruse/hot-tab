@@ -39,9 +39,12 @@ async function listPins() {
 
 
 // Pin a tab to a certain key, so that it can be focused or summoned later.
-async function pinTab(args) {
-  const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-  await setPin(args.key, currentTab);
+async function pinTab(args, tab) {
+  if (!tab) {
+    const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    tab = currentTab
+  }
+  await setPin(args.key, tab);
 }
 
 
@@ -53,13 +56,20 @@ async function focusTab(args) {
   }
   let pinnedTab = await chrome.tabs.get(pin.tabId);
   if (!pinnedTab) {
-    throw new Error(`Tab could not be retried.`);
+    throw new Error(`Tab could not be retrieved.`);
     // TODO: Create a new tab from the saved URL.
+  }
+  const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  if (currentTab.id === pinnedTab.id) {
+    return;
   }
   if (!pinnedTab.active) {
     pinnedTab = await chrome.tabs.update(pinnedTab.id, { active: true });
   }
   await chrome.windows.update(pinnedTab.windowId, { focused: true });
+
+  // Fire and forget.
+  pinTab({ key: 'Backspace' }, currentTab)
 }
 
 
@@ -71,10 +81,13 @@ async function summonTab(args) {
   }
   let pinnedTab = await chrome.tabs.get(pin.tabId);
   if (!pinnedTab) {
-    throw new Error(`Tab could not be retried.`);
+    throw new Error(`Tab could not be retrieved.`);
     // TODO: Create a new tab from the saved URL.
   }
   const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  if (currentTab.id === pinnedTab.id) {
+    return;
+  }
   if ((currentTab.windowId !== pinnedTab.windowId) || (Math.abs(currentTab.index - pinnedTab.index) > 1)) {
     pinnedTab = await chrome.tabs.move(pinnedTab.id, {
       index: currentTab.index + 1,
@@ -82,6 +95,9 @@ async function summonTab(args) {
     });
   }
   pinnedTab = await chrome.tabs.update(pinnedTab.id, { active: true });
+
+  // Fire and forget.
+  pinTab({ key: 'Backspace' }, currentTab)
 }
 
 

@@ -1,16 +1,31 @@
 document.addEventListener('keydown', async (event) => {
-  if (!/^Key[A-Z0-9]$/.test(event.code)) {
-    return;
-  }
-  if (event.ctrlKey) {
-    await chrome.runtime.sendMessage({ command: 'pinTab', args: { key: event.code } });
-  } else if (event.shiftKey) {
-    await chrome.runtime.sendMessage({ command: 'summonTab', args: { key: event.code } });
+  if (/^Key[A-Z]$/.test(event.code) || event.code === 'Backspace') {
+    if (event.ctrlKey) {
+      if (event.code === 'Backspace') {
+        // Pinning the Backspace key manually is not allowed. It's reserved for jumping back.
+        return;
+      }
+      await chrome.runtime.sendMessage({ command: 'pinTab', args: { key: event.code } });
+    } else if (event.shiftKey) {
+      await chrome.runtime.sendMessage({ command: 'summonTab', args: { key: event.code } });
+    } else {
+      await chrome.runtime.sendMessage({ command: 'focusTab', args: { key: event.code } });
+    }
   } else {
-    await chrome.runtime.sendMessage({ command: 'focusTab', args: { key: event.code } });
+    return;
   }
   window.close();
 });
+
+function getSymbolForKeycode(key) {
+  if (key.startsWith('Key')) {
+    return key.replace('Key', '');
+  }
+  if (key === 'Backspace') {
+    return '&#9003;';
+  }
+  return key
+}
 
 document.addEventListener('DOMContentLoaded', async () => {
   const result = await chrome.runtime.sendMessage({ command: 'listPins' });
@@ -25,7 +40,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     li.classList.add('flex', 'flex-row');
     const keySpan = document.createElement('span');
     keySpan.classList.add('key');
-    keySpan.innerText = key.replace('Key', '');
+    keySpan.innerHTML = getSymbolForKeycode(key);
     li.appendChild(keySpan);
     if (pin.favIconUrl) {
       const icon = document.createElement('img');
