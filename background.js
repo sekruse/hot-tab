@@ -47,6 +47,22 @@ async function pinTab(args, tab) {
   await setPin(args.key, tab);
 }
 
+// Recreate a pinned tab.
+async function resurrectTab(pin) {
+  console.log(`Resurrecting tab for ${JSON.stringify(pin)}...`);
+  let window;
+  try {
+    window = await chrome.windows.get(pin.windowId)
+  } catch (error) {
+    window = await chrome.windows.getLastFocused();
+  }
+  console.log(`Creating the tab in ${JSON.stringify(window)}...`);
+  return chrome.tabs.create({
+    url: pin.url,
+    windowId: window.id,
+  })
+}
+
 
 // Bring a pinned tab to the focus, possibly shifting focus to its window.
 async function focusTab(args) {
@@ -54,10 +70,10 @@ async function focusTab(args) {
   if (!pin) {
     throw new Error(`No tab pinned for ${args.key}.`);
   }
-  let pinnedTab = await chrome.tabs.get(pin.tabId);
-  if (!pinnedTab) {
-    throw new Error(`Tab could not be retrieved.`);
-    // TODO: Create a new tab from the saved URL.
+  try {
+    pinnedTab = await chrome.tabs.get(pin.tabId);
+  } catch (error) {
+    pinnedTab = await resurrectTab(pin);
   }
   const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
   if (currentTab.id === pinnedTab.id) {
@@ -72,17 +88,17 @@ async function focusTab(args) {
   pinTab({ key: 'Backspace' }, currentTab)
 }
 
-
 // Bring a pinned tab to the current window, right next to the current tab.
 async function summonTab(args) {
   const pin = await getPin(args.key);
   if (!pin) {
     throw new Error(`No tab pinned for ${args.key}.`);
   }
-  let pinnedTab = await chrome.tabs.get(pin.tabId);
-  if (!pinnedTab) {
-    throw new Error(`Tab could not be retrieved.`);
-    // TODO: Create a new tab from the saved URL.
+  let pinnedTab;
+  try {
+    pinnedTab = await chrome.tabs.get(pin.tabId);
+  } catch (error) {
+    pinnedTab = await resurrectTab(pin);
   }
   const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
   if (currentTab.id === pinnedTab.id) {
@@ -119,6 +135,7 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
     console.log(`Response: ${JSON.stringify(response)}`);
     respond(response);
   }).catch((error) => {
+    console.log(error);
     const response = { success: false, errorMessage: JSON.stringify(error) };
     console.log(`Response: ${JSON.stringify(response)}`);
     respond(response);
