@@ -1,12 +1,17 @@
-function getSymbolForKeycode(key) {
-  if (key.startsWith('Key')) {
-    return key.replace('Key', '');
-  }
-  if (key === 'Backspace') {
-    return '&#9003;';
-  }
-  return key
-}
+const codeSymbols = (() => {
+  const cs = new Map();
+  cs.set('Minus', '-');
+  cs.set('Equal', '=');
+  cs.set('LeftBracket', '[');
+  cs.set('RightBracket', ']');
+  cs.set('Backslash', '\\');
+  cs.set('Backspace', '&#9003;');
+  cs.set('Semicolon', ';');
+  cs.set('Quote', "'");
+  'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach((ch) => cs.set(`Key${ch}`, ch));
+  '1234567890'.split('').forEach((d) => cs.set(`Digit${d}`, d));
+  return cs;
+})();
 
 async function refreshPinnedTabs() {
   const result = await chrome.runtime.sendMessage({ command: 'listPins' });
@@ -22,7 +27,7 @@ async function refreshPinnedTabs() {
     li.classList.add('flex', 'flex-row');
     const keySpan = document.createElement('span');
     keySpan.classList.add('key');
-    keySpan.innerHTML = getSymbolForKeycode(key);
+    keySpan.innerHTML = codeSymbols.get(key);
     li.appendChild(keySpan);
     if (pin.favIconUrl) {
       const icon = document.createElement('img');
@@ -41,24 +46,23 @@ async function refreshPinnedTabs() {
 document.addEventListener('DOMContentLoaded', refreshPinnedTabs);
 
 document.addEventListener('keydown', async (event) => {
-  if (/^Key[A-Z]$/.test(event.code) || event.code === 'Backspace') {
-    if (event.ctrlKey) {
-      if (event.code === 'Backspace') {
-        // Pinning the Backspace key manually is not allowed. It's reserved for jumping back.
-        return;
-      }
-      await chrome.runtime.sendMessage({ command: 'pinTab', args: { key: event.code } });
-    } else if (event.shiftKey) {
-      await chrome.runtime.sendMessage({ command: 'summonTab', args: { key: event.code } });
-    } else if (event.altKey) {
-      await chrome.runtime.sendMessage({ command: 'removePin', args: { key: event.code } });
-      await refreshPinnedTabs();
-      return;
-    } else {
-      await chrome.runtime.sendMessage({ command: 'focusTab', args: { key: event.code } });
-    }
-  } else {
+  if (!codeSymbols.has(event.code)) {
     return;
+  }
+  if (event.code === 'Backspace' && event.ctrlKey) {
+    // Pinning the Backspace key manually is not allowed. It's reserved for jumping back.
+    return;
+  }
+  if (event.ctrlKey) {
+    await chrome.runtime.sendMessage({ command: 'pinTab', args: { key: event.code } });
+  } else if (event.shiftKey) {
+    await chrome.runtime.sendMessage({ command: 'summonTab', args: { key: event.code } });
+  } else if (event.altKey) {
+    await chrome.runtime.sendMessage({ command: 'removePin', args: { key: event.code } });
+    await refreshPinnedTabs();
+    return;
+  } else {
+    await chrome.runtime.sendMessage({ command: 'focusTab', args: { key: event.code } });
   }
   window.close();
 });
