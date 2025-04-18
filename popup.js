@@ -26,7 +26,7 @@ async function refreshPinnedTabs() {
     const li = document.createElement('li');
     li.classList.add('flex', 'flex-row');
     const keySpan = document.createElement('span');
-    keySpan.classList.add('key');
+    keySpan.classList.add('key', 'key-inline');
     keySpan.innerHTML = codeSymbols.get(key);
     li.appendChild(keySpan);
     if (pin.favIconUrl) {
@@ -40,6 +40,14 @@ async function refreshPinnedTabs() {
     title.innerText = pin.title;
     li.appendChild(title);
     pinnedTabsList.appendChild(li);
+  });
+  document.querySelectorAll('#keyboard .key').forEach((key) => {
+    key.innerHTML = '';
+  });
+  Object.keys(pins).forEach((key) => {
+    const pin = pins[key];
+    const keyDiv = document.getElementById(`key${key}`);
+    keyDiv.innerHTML = `<img class="icon" src="${pin.favIconUrl}" />`;
   });
 }
 
