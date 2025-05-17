@@ -1,6 +1,7 @@
 body {
   font-family: system-ui, sans-serif;
   font-size: 10pt;
+  background: #e0d1be;
 }
 ul {
   padding: 5px;
@@ -96,4 +97,7 @@ li {
 }
 .margin-left-double {
   margin-left: 10px;
+}
+.margin-bottom {
+  margin-bottom: 5px;
 }

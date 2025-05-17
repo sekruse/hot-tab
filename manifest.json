@@ -4,6 +4,7 @@
   "version": "0.0.1",
   "manifest_version": 3,
   "permissions": [
+    "sidePanel",
     "storage",
     "tabs"
   ],
@@ -17,8 +18,12 @@
       "128": "images/icon-128.png"
     }
   },
+  "side_panel": {
+    "default_path": "side-panel.html"
+  },
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "type": "module"
   },
   "icons": {
     "16": "images/icon-16.png",
