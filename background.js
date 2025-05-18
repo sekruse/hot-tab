@@ -1,3 +1,4 @@
+import { UserException } from './lpc.js';
 // Maps key codes to pinned tabs.
 let pinCache = null;
 
@@ -68,7 +69,7 @@ async function resurrectTab(pin) {
 async function focusTab(args) {
   const pin = await getPin(args.key);
   if (!pin) {
-    throw new Error(`No tab pinned for ${args.key}.`);
+    throw new UserException(`No tab pinned for ${args.key}.`);
   }
   try {
     pinnedTab = await chrome.tabs.get(pin.tabId);
@@ -102,7 +103,7 @@ async function focusTab(args) {
 async function summonTab(args) {
   const pin = await getPin(args.key);
   if (!pin) {
-    throw new Error(`No tab pinned for ${args.key}.`);
+    throw new UserException(`No tab pinned for ${args.key}.`);
   }
   let pinnedTab;
   try {
@@ -151,7 +152,7 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
   console.log(`Incoming message: ${JSON.stringify(msg)}`);
   const handler = messageHandlers[msg.command];
   if (!handler) {
-    throw new Error(`No handler for message: ${JSON.stringify(msg)}`);
+    throw new UserException(`No handler for message: ${JSON.stringify(msg)}`);
   }
   handler(msg.args).then((result) => {
     const response = { success: true, result };
@@ -159,7 +160,13 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
     respond(response);
   }).catch((error) => {
     console.log(error);
-    const response = { success: false, errorMessage: JSON.stringify(error) };
+    const response = {
+        success: false,
+        error: {
+          name: error.name,
+          message: error.message,
+        }
+      };
     console.log(`Response: ${JSON.stringify(response)}`);
     respond(response);
   });

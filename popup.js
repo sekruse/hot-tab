@@ -1,11 +1,8 @@
 import { keyCodeToHTML } from './keys.js';
+import { lpc } from './lpc.js';
 
 async function refreshPinnedTabs() {
-  const result = await chrome.runtime.sendMessage({ command: 'listPins' });
-  if (!result.success) {
-    throw new Error(result.errorMessage);
-  }
-  const pins = result.result;
+  const pins = await lpc('listPins');
   document.querySelectorAll('#keyboard .key').forEach((key) => {
     key.innerHTML = '';
   });
@@ -27,15 +24,15 @@ document.addEventListener('keydown', async (event) => {
     return;
   }
   if (event.ctrlKey) {
-    await chrome.runtime.sendMessage({ command: 'pinTab', args: { key: event.code } });
+    await lpc('pinTab', { key: event.code });
   } else if (event.shiftKey) {
-    await chrome.runtime.sendMessage({ command: 'summonTab', args: { key: event.code } });
+    await lpc('summonTab', { key: event.code });
   } else if (event.altKey) {
-    await chrome.runtime.sendMessage({ command: 'removePin', args: { key: event.code } });
+    await lpc('removePin', { key: event.code });
     await refreshPinnedTabs();
     return;
   } else {
-    await chrome.runtime.sendMessage({ command: 'focusTab', args: { key: event.code } });
+    await lpc('focusTab', { key: event.code });
   }
   window.close();
 });
