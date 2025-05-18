@@ -11,7 +11,7 @@ async function refreshPinnedTabs() {
   Object.keys(pins).sort().forEach((key) => {
     const pin = pins[key];
     const li = document.createElement('li');
-    li.classList.add('flex', 'flex-row');
+    li.classList.add('tab', 'flex', 'flex-row');
     const keySpan = document.createElement('span');
     keySpan.classList.add('key', 'key-inline');
     keySpan.innerHTML = keyCodeToHTML.get(key);
