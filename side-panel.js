@@ -19,6 +19,9 @@ async function refreshPinnedTabs() {
     if (pin.favIconUrl) {
       const icon = document.createElement('img');
       icon.classList.add('icon', 'margin-left');
+      icon.addEventListener('error', (event) => {
+        icon.outerHTML = `<div class="icon-fallback margin-left">${pin.title[0]}${pin.title[1]}</div>`;
+      });
       icon.setAttribute('src', pin.favIconUrl)
       li.appendChild(icon);
     };

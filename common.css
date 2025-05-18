@@ -102,3 +102,13 @@ body {
   max-width: 18px;
   display: inline-block;
 }
+.icon-fallback {
+  height: 18px;
+  width: 18px;
+  display: inline-block;
+  border-radius: 2px;
+  background-color: #2077ff;
+  color: #ffffff;
+  font-weight: bold;
+  overflow: hidden;
+}

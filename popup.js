@@ -9,7 +9,12 @@ async function refreshPinnedTabs() {
   Object.keys(pins).forEach((key) => {
     const pin = pins[key];
     const keyDiv = document.getElementById(`key${key}`);
-    keyDiv.innerHTML = `<img class="icon" src="${pin.favIconUrl}" />`;
+    keyDiv.innerHTML = `<img class="icon" alt="${pin.title}"/>`;
+    const icon = keyDiv.querySelector('img.icon');
+    icon.addEventListener('error', (event) => {
+      icon.outerHTML = `<div class="icon-fallback">${pin.title[0]}${pin.title[1]}</div>`;
+    });
+    icon.setAttribute('src', pin.favIconUrl);
   });
 }
 
