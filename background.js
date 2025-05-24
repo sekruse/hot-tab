@@ -83,6 +83,7 @@ async function focusTab(args) {
   if (!pin) {
     throw new UserException(`No tab pinned for ${args.key}.`);
   }
+  let pinnedTab;
   try {
     pinnedTab = await chrome.tabs.get(pin.tabId);
   } catch (error) {
