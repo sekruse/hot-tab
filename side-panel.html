@@ -5,6 +5,37 @@
 </head>
 <body>
     <ul id="pinnedTabsList" class="bullets-none"></ul>
+    <!-- Modal -->
+    <div id="modal" class="modal-overlay hidden">
+      <div class="modal-dialog flex flex-column">
+        <h1>Update Tab Pin</h1>
+        <div class="margin-top">
+          <form> 
+            <div>
+              <label for="key">Key:</label>
+              <input id="inputKey" name="key" type="text" value="Slash" disabled>
+            </div>
+            <div class="margin-top">
+              <label for="title">URL Pattern:</label>
+              <input id="inputTitle" name="title" type="text" value="">
+            </div>
+            <div class="margin-top">
+              <label for="url">URL:</label>
+              <input id="inputURL" name="url" type="text" value="">
+            </div>
+            <div class="margin-top">
+              <label for="urlPattern">URL Pattern:</label>
+              <input id="inputURLPattern" name="urlPattern" type="text" value="" disabled>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer margin-top">
+          <button id="modal-delete-button" class="button-delete">Delete</button>
+          <button id="modal-cancel-button" style="margin-left: 15px;">Cancel</button>
+          <button id="modal-save-button" class="button-save" style="margin-left: 5px;">Save</button>
+        </div>
+      </div>
+    </div>
     <script src="side-panel.js" type="module"></script>
 </body>
 </html>

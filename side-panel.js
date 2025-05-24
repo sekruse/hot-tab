@@ -1,4 +1,6 @@
 import { keyCodeToHTML } from './keys.js';
+import { lpc } from './lpc.js';
+import modal from './modal.js';
 
 async function refreshPinnedTabs() {
   const result = await chrome.runtime.sendMessage({ command: 'listPins' });
@@ -29,8 +31,44 @@ async function refreshPinnedTabs() {
     title.classList.add('margin-left');
     title.innerText = pin.title;
     li.appendChild(title);
+    li.addEventListener('click', (ev) => {
+      showDialog(key, pin);
+    });
     pinnedTabsList.appendChild(li);
   });
 }
 
 document.addEventListener('DOMContentLoaded', refreshPinnedTabs);
+
+async function showDialog(key, pin) {
+  document.getElementById('inputKey').value = key;
+  document.getElementById('inputTitle').value = pin.title;
+  document.getElementById('inputURL').value = pin.url;
+  document.getElementById('inputURLPattern').value = pin.url;
+  modal.show();
+}
+
+async function saveFromDialog() {
+  await lpc('updatePin', {
+    key: document.getElementById('inputKey').value,
+    updates: {
+      title: document.getElementById('inputTitle').value,
+      url: document.getElementById('inputURL').value,
+      urlPattern: document.getElementById('inputURLPattern').value,
+    },
+  });
+  modal.hide();
+  refreshPinnedTabs();
+}
+
+async function deleteFromDialog() {
+  await lpc('removePin', {
+    key: document.getElementById('inputKey').value,
+  });
+  modal.hide();
+  refreshPinnedTabs();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  modal.init(saveFromDialog, deleteFromDialog);
+});

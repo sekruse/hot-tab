@@ -11,4 +11,7 @@ export class UserException {
     this.name = 'UserException';
     this.message = message;
   }
+  toString() {
+    return `UserException: ${message}`;
+  }
 }

@@ -32,6 +32,18 @@ async function setPin(key, tab) {
   await chrome.storage.local.set({ pins: pinCache });
 }
 
+async function updatePin(key, updates) {
+  const pin = await getPin(key); // Ensure pinCache is loaded.
+  ['title', 'url', 'urlPattern'].forEach(p => {
+    if (p in updates) {
+      pin[p] = updates[p];
+    }
+  });
+  if ('key' in updates && updates.key !== key) {
+    delete pinCache[key];
+  }
+  await chrome.storage.local.set({ pins: pinCache });
+}
 
 async function listPins() {
   await getPin('dummy');
@@ -103,7 +115,7 @@ async function focusTab(args) {
 async function summonTab(args) {
   const pin = await getPin(args.key);
   if (!pin) {
-    throw new UserException(`No tab pinned for ${args.key}.`);
+    throw new Error(`No tab pinned for ${args.key}.`);
   }
   let pinnedTab;
   try {
@@ -140,6 +152,9 @@ async function summonTab(args) {
 
 const messageHandlers = {
   'pinTab': pinTab,
+  'updatePin': async (args) => {
+    await updatePin(args.key, args.updates);
+  },
   'removePin': async (args) => {
     await removePin(args.key);
   },
