@@ -124,6 +124,9 @@ button:hover, button:focus {
   max-width: 18px;
   display: inline-block;
 }
+.icon-inactive {
+  filter: invert(1) grayscale(1);
+}
 .icon-fallback {
   height: 18px;
   width: 18px;
@@ -134,6 +137,7 @@ button:hover, button:focus {
   font-weight: bold;
   overflow: hidden;
 }
+
 
 /* Tabs list */
 .tab {

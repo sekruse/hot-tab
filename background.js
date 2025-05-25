@@ -79,6 +79,15 @@ async function findTab(pin, key) {
 
 async function listPins() {
   await getPin('dummy');
+  await Promise.all(Object.keys(pinCache).map(async (key) => {
+    const pin = pinCache[key];
+    const tab = await findTab(pin, key);
+    if (!tab) {
+      delete pin.tabId;
+      delete pin.windowId;
+      delete pin.index;
+    }
+  }));
   return pinCache;
 }
 

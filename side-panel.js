@@ -1,4 +1,4 @@
-import { keyCodeToHTML } from './keys.js';
+import { keyCodeToHTML, createIcon } from './keys.js';
 import { lpc } from './lpc.js';
 import modal from './modal.js';
 import toast from './toast.js';
@@ -19,15 +19,7 @@ async function refreshPinnedTabs() {
     keySpan.classList.add('key', 'key-inline');
     keySpan.innerHTML = keyCodeToHTML.get(key);
     li.appendChild(keySpan);
-    if (pin.favIconUrl) {
-      const icon = document.createElement('img');
-      icon.classList.add('icon', 'margin-left');
-      icon.addEventListener('error', (event) => {
-        icon.outerHTML = `<div class="icon-fallback margin-left">${pin.title[0]}${pin.title[1]}</div>`;
-      });
-      icon.setAttribute('src', pin.favIconUrl)
-      li.appendChild(icon);
-    };
+    li.appendChild(createIcon(pin, ['margin-left']));
     const title = document.createElement('span');
     title.classList.add('margin-left');
     title.innerText = pin.title;
