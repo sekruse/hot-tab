@@ -68,6 +68,7 @@ async function findTab(pin, key) {
       await setPin(key, tab, {
         title: pin.title,
         favIconUrl: pin.favIconUrl,
+        url: pin.url,
         urlPattern: pin.urlPattern,
       });
     }
