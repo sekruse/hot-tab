@@ -44,7 +44,7 @@ async function showDialog(key, pin) {
   document.getElementById('inputKey').value = key;
   document.getElementById('inputTitle').value = pin.title;
   document.getElementById('inputURL').value = pin.url;
-  document.getElementById('inputURLPattern').value = pin.url;
+  document.getElementById('inputURLPattern').value = pin.urlPattern;
   modal.show();
 }
 

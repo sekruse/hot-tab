@@ -19,16 +19,21 @@ async function removePin(key) {
   await chrome.storage.local.set({ pins: pinCache });
 }
 
-async function setPin(key, tab) {
+async function setPin(key, tab, overrides) {
   await getPin(key); // Ensure pinCache is loaded.
-  pinCache[key] = {
+  let pin = {
     tabId: tab.id,
     windowId: tab.windowId,
     index: tab.index,
     title: tab.title,
     url: tab.url,
+    urlPattern: tab.url,
     favIconUrl: tab.favIconUrl,
+  };
+  if (overrides) {
+    pin = {...pin, ...overrides};
   }
+  pinCache[key] = pin;
   await chrome.storage.local.set({ pins: pinCache });
 }
 
@@ -43,6 +48,32 @@ async function updatePin(key, updates) {
     delete pinCache[key];
   }
   await chrome.storage.local.set({ pins: pinCache });
+}
+
+async function findTab(pin, key) {
+  // First, try to retrieve the pinned tab.
+  if (pin.tabId !== undefined) {
+    try {
+      return await chrome.tabs.get(pin.tabId);
+    } catch (error) {
+      console.log(`Tab for ${pin.title} not found: ${error}`);
+    }
+  }
+  // Otherwise, try to find a tab that matches the URL pattern.
+  const tabs = await chrome.tabs.query({ url: pin.urlPattern });
+  console.log(`Found ${tabs.length} tabs matching ${pin.urlPattern }`);
+  if (tabs.length > 0) {
+    const tab = tabs[0];
+    if (key) {
+      await setPin(key, tab, {
+        title: pin.title,
+        favIconUrl: pin.favIconUrl,
+        urlPattern: pin.urlPattern,
+      });
+    }
+    return tab;
+  }
+  return null;
 }
 
 async function listPins() {
@@ -83,20 +114,16 @@ async function focusTab(args) {
   if (!pin) {
     throw new UserException(`No tab pinned for ${args.key}.`);
   }
-  let pinnedTab;
-  try {
-    pinnedTab = await chrome.tabs.get(pin.tabId);
-  } catch (error) {
+  let pinnedTab = await findTab(pin, args.key);
+  if (pinnedTab === null) {
     pinnedTab = await resurrectTab(pin);
     // At this point, the tab has been created but it's loading the URL is likely pending.
     // So we update only basic properties of our pin.
-    await setPin(args.key, {
-      id: pinnedTab.id,
-      windowId: pinnedTab.windowId,
-      index: pinnedTab.index,
+    await setPin(args.key, pinnedTab, {
       title: pin.title,
-      url: pin.url,
       favIconUrl: pin.favIconUrl,
+      url: pin.url,
+      urlPattern: pin.urlPattern,
     });
   }
   const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
@@ -125,13 +152,11 @@ async function summonTab(args) {
     pinnedTab = await resurrectTab(pin);
     // At this point, the tab has been created but it's loading the URL is likely pending.
     // So we update only basic properties of our pin.
-    await setPin(args.key, {
-      id: pinnedTab.id,
-      windowId: pinnedTab.windowId,
-      index: pinnedTab.index,
+    await setPin(args.key, pinnedTab, {
       title: pin.title,
-      url: pin.url,
       favIconUrl: pin.favIconUrl,
+      url: pin.url,
+      urlPattern: pin.urlPattern,
     });
   }
   const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
