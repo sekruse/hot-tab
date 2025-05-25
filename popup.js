@@ -1,9 +1,11 @@
 import { keyCodeToHTML, createIcon } from './keys.js';
-import { lpc } from './lpc.js';
+import { Client } from './lpc.js';
 import toast from './toast.js';
 
+const background = new Client(['listPins', 'pinTab', 'focusTab', 'summonTab', 'removePin']);
+
 async function refreshPinnedTabs() {
-  const pins = await lpc('listPins');
+  const pins = await background.listPins();
   document.querySelectorAll('#keyboard .key').forEach((key) => {
     key.innerHTML = '';
   });
@@ -30,16 +32,16 @@ document.addEventListener('keydown', toast.catch(async (event) => {
     return;
   }
   if (event.ctrlKey) {
-    await lpc('pinTab', { key: event.code });
+    await background.pinTab({ key: event.code });
   } else if (event.shiftKey) {
-    await lpc('summonTab', { key: event.code });
+    await background.summonTab({ key: event.code });
   } else if (event.altKey) {
-    await lpc('removePin', { key: event.code });
+    await background.removePin({ key: event.code });
     toast.show(`Pin for ${event.code} removed.`, 3000);
     await refreshPinnedTabs();
     return;
   } else {
-    await lpc('focusTab', { key: event.code });
+    await background.focusTab({ key: event.code });
   }
   window.close();
 }));

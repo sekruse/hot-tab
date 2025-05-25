@@ -1,14 +1,12 @@
 import { keyCodeToHTML, createIcon } from './keys.js';
-import { lpc } from './lpc.js';
+import { Client } from './lpc.js';
 import modal from './modal.js';
 import toast from './toast.js';
 
+const background = new Client(['listPins', 'updatePin', 'removePin']);
+
 async function refreshPinnedTabs() {
-  const result = await chrome.runtime.sendMessage({ command: 'listPins' });
-  if (!result.success) {
-    throw new Error(result.errorMessage);
-  }
-  const pins = result.result;
+  const pins = await background.listPins();
   const pinnedTabsList = document.getElementById('pinnedTabsList');
   pinnedTabsList.innerHTML = '';
   Object.keys(pins).sort().forEach((key) => {
@@ -43,7 +41,7 @@ async function showDialog(key, pin) {
 
 async function saveFromDialog() {
   const key = document.getElementById('inputKey').value;
-  await lpc('updatePin', {
+  await background.updatePin({
     key: key,
     updates: {
       title: document.getElementById('inputTitle').value,
@@ -58,7 +56,7 @@ async function saveFromDialog() {
 
 async function deleteFromDialog() {
   const key = document.getElementById('inputKey').value;
-  await lpc('removePin', {
+  await background.removePin({
     key: key,
   });
   modal.hide();

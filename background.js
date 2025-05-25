@@ -1,4 +1,4 @@
-import { UserException } from './lpc.js';
+import { Server, UserException } from './lpc.js';
 // Maps key codes to pinned tabs.
 let pinCache = null;
 
@@ -186,7 +186,7 @@ async function summonTab(args) {
 }
 
 
-const messageHandlers = {
+const server = new Server({
   'pinTab': pinTab,
   'updatePin': async (args) => {
     await updatePin(args.key, args.updates);
@@ -197,29 +197,6 @@ const messageHandlers = {
   'focusTab': focusTab,
   'summonTab': summonTab,
   'listPins': listPins,
-};
-
-chrome.runtime.onMessage.addListener((msg, sender, respond) => {
-  console.log(`Incoming message: ${JSON.stringify(msg)}`);
-  const handler = messageHandlers[msg.command];
-  if (!handler) {
-    throw new UserException(`No handler for message: ${JSON.stringify(msg)}`);
-  }
-  handler(msg.args).then((result) => {
-    const response = { success: true, result };
-    console.log(`Response: ${JSON.stringify(response)}`);
-    respond(response);
-  }).catch((error) => {
-    console.log(error);
-    const response = {
-        success: false,
-        error: {
-          name: error.name,
-          message: error.message,
-        }
-      };
-    console.log(`Response: ${JSON.stringify(response)}`);
-    respond(response);
-  });
-  return true;
 });
+
+chrome.runtime.onMessage.addListener(server.serve.bind(server));
