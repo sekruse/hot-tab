@@ -1,6 +1,7 @@
 import { keyCodeToHTML } from './keys.js';
 import { lpc } from './lpc.js';
 import modal from './modal.js';
+import toast from './toast.js';
 
 async function refreshPinnedTabs() {
   const result = await chrome.runtime.sendMessage({ command: 'listPins' });
@@ -38,7 +39,7 @@ async function refreshPinnedTabs() {
   });
 }
 
-document.addEventListener('DOMContentLoaded', refreshPinnedTabs);
+document.addEventListener('DOMContentLoaded', toast.catch(refreshPinnedTabs));
 
 async function showDialog(key, pin) {
   document.getElementById('inputKey').value = key;
@@ -49,8 +50,9 @@ async function showDialog(key, pin) {
 }
 
 async function saveFromDialog() {
+  const key = document.getElementById('inputKey').value;
   await lpc('updatePin', {
-    key: document.getElementById('inputKey').value,
+    key: key,
     updates: {
       title: document.getElementById('inputTitle').value,
       url: document.getElementById('inputURL').value,
@@ -58,17 +60,20 @@ async function saveFromDialog() {
     },
   });
   modal.hide();
+  toast.show(`Pin for ${key} updated.`, 3000);
   refreshPinnedTabs();
 }
 
 async function deleteFromDialog() {
+  const key = document.getElementById('inputKey').value;
   await lpc('removePin', {
-    key: document.getElementById('inputKey').value,
+    key: key,
   });
   modal.hide();
+  toast.show(`Pin for ${key} removed.`, 3000);
   refreshPinnedTabs();
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-  modal.init(saveFromDialog, deleteFromDialog);
-});
+document.addEventListener('DOMContentLoaded', toast.catch(() => {
+  modal.init(toast.catch(saveFromDialog), toast.catch(deleteFromDialog));
+}));

@@ -79,12 +79,18 @@
         </div>
       </div>
     </div>
-    <script src="popup.js" type="module"></script>
     <div class="small-font margin-top">
       Press key to focus tab,
       <span class="key key-inline">&#8679;</span> + key to summon tab,
       <span class="key key-inline">Ctrl</span> + key to pin current tab,
       or <span class="key key-inline">Alt</span> + key to remove the pin.
     </div>
+
+    <!-- Toast -->
+    <div id="toast" class="toast hidden">
+      <button id="toast-close">&#x2715;</button>
+      <span id="toast-content">Test</span>
+    </div>
+    <script src="popup.js" type="module"></script>
 </body>
 </html>
