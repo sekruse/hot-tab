@@ -1,6 +1,7 @@
 import { keyCodeToHTML, createIcon } from './keys.js';
 import { Client } from './lpc.js';
 import toast from './toast.js';
+import tooltip from './tooltip.js';
 
 const background = new Client(['listPins', 'pinTab', 'focusTab', 'summonTab', 'removePin']);
 
@@ -8,17 +9,21 @@ async function refreshPinnedTabs() {
   const pins = await background.listPins();
   document.querySelectorAll('#keyboard .key').forEach((key) => {
     key.innerHTML = '';
+    key.removeAttribute('data-tooltip');
   });
   Object.keys(pins).forEach((key) => {
     const pin = pins[key];
     const keyDiv = document.getElementById(`key${key}`);
+    keyDiv.setAttribute('data-tooltip', pin.title);
     keyDiv.replaceChildren(createIcon(pin));
   });
 }
 
+
 document.addEventListener('DOMContentLoaded', () => {
   toast.init();
   toast.catch(() => {
+    tooltip.init();
     refreshPinnedTabs();
   })();
 });
