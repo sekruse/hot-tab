@@ -19,11 +19,37 @@ async function refreshPinnedTabs() {
   });
 }
 
+function addClickListeners() {
+  document.querySelectorAll('[data-keycode]').forEach((key) => {
+    key.addEventListener('click', async (event) => {
+      const keyCode = event.currentTarget.getAttribute('data-keycode');
+      if (keyCode === 'Backspace' && event.ctrlKey) {
+        // Pinning the Backspace key manually is not allowed. It's reserved for jumping back.
+        return;
+      }
+      if (event.ctrlKey) {
+        await background.pinTab({ key: keyCode });
+      } else if (event.shiftKey) {
+        await background.summonTab({ key: keyCode });
+      } else if (event.altKey) {
+        await background.removePin({ key: keyCode });
+        toast.show(`Pin for ${keyCode} removed.`, 3000);
+        await refreshPinnedTabs();
+        return;
+      } else {
+        await background.focusTab({ key: keyCode });
+      }
+      window.close();
+    });
+  });
+}
+
 
 document.addEventListener('DOMContentLoaded', () => {
   toast.init();
   toast.catch(() => {
     tooltip.init();
+    addClickListeners();
     refreshPinnedTabs();
   })();
 });
