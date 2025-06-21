@@ -5,8 +5,11 @@ import toast from './toast.js';
 
 const background = new Client(['listPins', 'updatePin', 'removePin']);
 
+// TODO: Allow selecting various keysets.
+const KEYSET_ID = 0;
+
 async function refreshPinnedTabs() {
-  const pins = await background.listPins();
+  const pins = await background.listPins({ keysetId: KEYSET_ID });
   const pinnedTabsList = document.getElementById('pinnedTabsList');
   pinnedTabsList.innerHTML = '';
   Object.keys(pins).sort().forEach((key) => {
@@ -43,6 +46,7 @@ async function saveFromDialog() {
   const key = document.getElementById('inputKey').value;
   await background.updatePin({
     key: key,
+    keysetId: KEYSET_ID,
     updates: {
       title: document.getElementById('inputTitle').value,
       url: document.getElementById('inputURL').value,
@@ -58,6 +62,7 @@ async function deleteFromDialog() {
   const key = document.getElementById('inputKey').value;
   await background.removePin({
     key: key,
+    keysetId: KEYSET_ID,
   });
   modal.hide();
   toast.show(`Pin for ${key} removed.`, 3000);

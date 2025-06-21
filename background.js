@@ -1,26 +1,38 @@
 import { Server, UserException } from './lpc.js';
-// Maps key codes to pinned tabs.
-let pinCache = null;
 
-async function getPin(key) {
-  if (pinCache === null) {
-    const loaded = await chrome.storage.local.get('pins');
-    pinCache = loaded.pins || {};
+const GLOBAL_KEYSET_ID = -1;
+const HISTORY_KEY = 'Backspace';
+
+// Maps key codes to pinned tabs.
+let keysetCache = null;
+
+const defaultKeysets = (function*() {
+  yield GLOBAL_KEYSET_ID;
+  for (let i = 0; i < 10; i++) { yield i; }
+})().reduce((acc, val) => {
+  acc[val] = {};
+  return acc;
+}, []);
+
+async function getPin(key, keysetId) {
+  if (keysetCache === null) {
+    const loaded = await chrome.storage.local.get('keysets');
+    keysetCache = {...defaultKeysets, ...loaded.keysets};
   }
-  return pinCache[key];
+  return keysetCache[keysetId][key];
 }
 
-async function removePin(key) {
-  // Check if work is necessary but also make sure that pinCache is loaded.
-  if (!await getPin(key)) {
+async function removePin(key, keysetId) {
+  // Check if work is necessary but also make sure that keysetCache is loaded.
+  if (!await getPin(key, keysetId)) {
     return;
   }
-  delete pinCache[key];
-  await chrome.storage.local.set({ pins: pinCache });
+  delete keysetCache[keysetId][key];
+  await chrome.storage.local.set({ keysets: keysetCache });
 }
 
-async function setPin(key, tab, overrides) {
-  await getPin(key); // Ensure pinCache is loaded.
+async function setPin(key, keysetId, tab, overrides) {
+  await getPin(key, keysetId); // Ensure keysetCache is loaded.
   let pin = {
     tabId: tab.id,
     windowId: tab.windowId,
@@ -33,24 +45,25 @@ async function setPin(key, tab, overrides) {
   if (overrides) {
     pin = {...pin, ...overrides};
   }
-  pinCache[key] = pin;
-  await chrome.storage.local.set({ pins: pinCache });
+  keysetCache[keysetId][key] = pin;
+  await chrome.storage.local.set({ keysets: keysetCache });
 }
 
-async function updatePin(key, updates) {
-  const pin = await getPin(key); // Ensure pinCache is loaded.
+async function updatePin(key, keysetId, updates) {
+  const pin = await getPin(key, keysetId); // Ensure keysetCache is loaded.
   ['title', 'url', 'urlPattern'].forEach(p => {
     if (p in updates) {
       pin[p] = updates[p];
     }
   });
-  if ('key' in updates && updates.key !== key) {
-    delete pinCache[key];
+  if (('key' in updates && updates.key !== key) || ('keysetId' in updates && updates.keysetId != keysetId)) {
+    delete keysetCache[keysetId][key];
+    keysetCache[updates.keysetId || keysetId][updates.key || key] = pin;
   }
-  await chrome.storage.local.set({ pins: pinCache });
+  await chrome.storage.local.set({ keysets: keysetCache });
 }
 
-async function findTab(pin, key) {
+async function findTab(pin, key, keysetId) {
   // First, try to retrieve the pinned tab.
   if (pin.tabId !== undefined) {
     try {
@@ -64,8 +77,8 @@ async function findTab(pin, key) {
   console.log(`Found ${tabs.length} tabs matching ${pin.urlPattern }`);
   if (tabs.length > 0) {
     const tab = tabs[0];
-    if (key) {
-      await setPin(key, tab, {
+    if (key && keysetId) {
+      await setPin(key, keysetId, tab, {
         title: pin.title,
         favIconUrl: pin.favIconUrl,
         url: pin.url,
@@ -77,28 +90,29 @@ async function findTab(pin, key) {
   return null;
 }
 
-async function listPins() {
-  await getPin('dummy');
-  await Promise.all(Object.keys(pinCache).map(async (key) => {
-    const pin = pinCache[key];
-    const tab = await findTab(pin, key);
+async function listPins(keysetId) {
+  await getPin('A', keysetId);  // dummy values
+  const keyset = keysetCache[keysetId];
+  await Promise.all(Object.keys(keyset).map(async (key) => {
+    const pin = keysetCache[keysetId][key];
+    const tab = await findTab(pin, key, keysetId);
     if (!tab) {
       delete pin.tabId;
       delete pin.windowId;
       delete pin.index;
     }
   }));
-  return pinCache;
+  return keyset;
 }
 
 
 // Pin a tab to a certain key, so that it can be focused or summoned later.
-async function pinTab(args, tab) {
+async function pinTab(key, keysetId, tab) {
   if (!tab) {
     const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
     tab = currentTab
   }
-  await setPin(args.key, tab);
+  await setPin(key, keysetId, tab);
 }
 
 // Recreate a pinned tab.
@@ -119,17 +133,17 @@ async function resurrectTab(pin) {
 
 
 // Bring a pinned tab to the focus, possibly shifting focus to its window.
-async function focusTab(args) {
-  const pin = await getPin(args.key);
+async function focusTab(key, keysetId) {
+  const pin = await getPin(key, keysetId);
   if (!pin) {
-    throw new UserException(`No tab pinned for ${args.key}.`);
+    throw new UserException(`No tab pinned for ${key} in keyset ${keysetId}.`);
   }
-  let pinnedTab = await findTab(pin, args.key);
+  let pinnedTab = await findTab(pin, key, keysetId);
   if (pinnedTab === null) {
     pinnedTab = await resurrectTab(pin);
     // At this point, the tab has been created but it's loading the URL is likely pending.
     // So we update only basic properties of our pin.
-    await setPin(args.key, pinnedTab, {
+    await setPin(key, keysetId, pinnedTab, {
       title: pin.title,
       favIconUrl: pin.favIconUrl,
       url: pin.url,
@@ -146,14 +160,14 @@ async function focusTab(args) {
   await chrome.windows.update(pinnedTab.windowId, { focused: true });
 
   // Fire and forget.
-  pinTab({ key: 'Backspace' }, currentTab)
+  pinTab(HISTORY_KEY, keysetId, currentTab)
 }
 
 // Bring a pinned tab to the current window, right next to the current tab.
-async function summonTab(args) {
-  const pin = await getPin(args.key);
+async function summonTab(key, keysetId) {
+  const pin = await getPin(key, keysetId);
   if (!pin) {
-    throw new Error(`No tab pinned for ${args.key}.`);
+    throw new Error(`No tab pinned for ${key} in keyset ${keysetId}.`);
   }
   let pinnedTab;
   try {
@@ -162,7 +176,7 @@ async function summonTab(args) {
     pinnedTab = await resurrectTab(pin);
     // At this point, the tab has been created but it's loading the URL is likely pending.
     // So we update only basic properties of our pin.
-    await setPin(args.key, pinnedTab, {
+    await setPin(key, keysetId, pinnedTab, {
       title: pin.title,
       favIconUrl: pin.favIconUrl,
       url: pin.url,
@@ -182,21 +196,29 @@ async function summonTab(args) {
   pinnedTab = await chrome.tabs.update(pinnedTab.id, { active: true });
 
   // Fire and forget.
-  pinTab({ key: 'Backspace' }, currentTab)
+  pinTab(HISTORY_KEY, keysetId, currentTab)
 }
 
 
 const server = new Server({
-  'pinTab': pinTab,
+  'pinTab': async (args) => {
+    return pinTab(args.key, args.keysetId);
+  },
   'updatePin': async (args) => {
-    await updatePin(args.key, args.updates);
+    await updatePin(args.key, args.keysetId, args.updates);
   },
   'removePin': async (args) => {
-    await removePin(args.key);
+    await removePin(args.key, args.keysetId);
   },
-  'focusTab': focusTab,
-  'summonTab': summonTab,
-  'listPins': listPins,
+  'focusTab': async (args) => {
+    await focusTab(args.key, args.keysetId);
+  },
+  'summonTab': async (args) => {
+    await summonTab(args.key, args.keysetId);
+  },
+  'listPins': async (args) => {
+    return listPins(args.keysetId);
+  },
 });
 
 chrome.runtime.onMessage.addListener(server.serve.bind(server));

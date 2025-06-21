@@ -5,8 +5,11 @@ import tooltip from './tooltip.js';
 
 const background = new Client(['listPins', 'pinTab', 'focusTab', 'summonTab', 'removePin']);
 
+// TODO: Allow to use multiple keysets.
+const KEYSET_ID = 0;
+
 async function refreshPinnedTabs() {
-  const pins = await background.listPins();
+  const pins = await background.listPins({ keysetId: KEYSET_ID });
   document.querySelectorAll('#keyboard .key').forEach((key) => {
     key.innerHTML = '';
     key.removeAttribute('data-tooltip');
@@ -28,16 +31,16 @@ function addClickListeners() {
         return;
       }
       if (event.ctrlKey) {
-        await background.pinTab({ key: keyCode });
+        await background.pinTab({ key: keyCode, keysetId: KEYSET_ID });
       } else if (event.shiftKey) {
-        await background.summonTab({ key: keyCode });
+        await background.summonTab({ key: keyCode, keysetId: KEYSET_ID });
       } else if (event.altKey) {
-        await background.removePin({ key: keyCode });
+        await background.removePin({ key: keyCode, keysetId: KEYSET_ID });
         toast.show(`Pin for ${keyCode} removed.`, 3000);
         await refreshPinnedTabs();
         return;
       } else {
-        await background.focusTab({ key: keyCode });
+        await background.focusTab({ key: keyCode, keysetId: KEYSET_ID });
       }
       window.close();
     });
@@ -47,10 +50,10 @@ function addClickListeners() {
 
 document.addEventListener('DOMContentLoaded', () => {
   toast.init();
-  toast.catch(() => {
+  toast.catch(async () => {
     tooltip.init();
     addClickListeners();
-    refreshPinnedTabs();
+    await refreshPinnedTabs({keysetId: KEYSET_ID });
   })();
 });
 
@@ -63,16 +66,16 @@ document.addEventListener('keydown', toast.catch(async (event) => {
     return;
   }
   if (event.ctrlKey) {
-    await background.pinTab({ key: event.code });
+    await background.pinTab({ key: event.code, keysetId: KEYSET_ID });
   } else if (event.shiftKey) {
-    await background.summonTab({ key: event.code });
+    await background.summonTab({ key: event.code, keysetId: KEYSET_ID });
   } else if (event.altKey) {
-    await background.removePin({ key: event.code });
+    await background.removePin({ key: event.code, keysetId: KEYSET_ID });
     toast.show(`Pin for ${event.code} removed.`, 3000);
     await refreshPinnedTabs();
     return;
   } else {
-    await background.focusTab({ key: event.code });
+    await background.focusTab({ key: event.code, keysetId: KEYSET_ID });
   }
   window.close();
 }));
