@@ -4,7 +4,12 @@ const GLOBAL_KEYSET_ID = -1;
 const HISTORY_KEY = 'Backspace';
 
 // Maps key codes to pinned tabs.
+let stateCache = null;
 let keysetCache = null;
+
+const defaultState = {
+  keysetId: 1,
+};
 
 const defaultKeysets = (function*() {
   yield GLOBAL_KEYSET_ID;
@@ -13,6 +18,27 @@ const defaultKeysets = (function*() {
   acc[val] = {};
   return acc;
 }, []);
+
+async function getState() {
+  if (stateCache === null) {
+    const loaded = await chrome.storage.local.get('state');
+    stateCache = {...defaultState, ...loaded.state};
+  }
+  return stateCache;
+}
+
+async function storeState() {
+  if (stateCache === null) {
+    return;
+  }
+  return chrome.storage.local.set({'state': stateCache});
+}
+
+async function setActiveKeysetId(keysetId) {
+  const state = await getState();
+  state.keysetId = keysetId;
+  await storeState();
+}
 
 async function getPin(key, keysetId) {
   if (keysetCache === null) {
@@ -201,6 +227,12 @@ async function summonTab(key, keysetId) {
 
 
 const server = new Server({
+  'getState': async (args) => {
+    return getState();
+  },
+  'setActiveKeysetId': async (args) => {
+    await setActiveKeysetId(args.keysetId);
+  },
   'pinTab': async (args) => {
     return pinTab(args.key, args.keysetId);
   },

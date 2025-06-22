@@ -40,3 +40,11 @@ export function createIcon(pin, extraClasses) {
   icon.setAttribute('src', pin.favIconUrl)
   return icon;
 }
+
+export function parseDigitKeycode(keycode) {
+  const match = keycode.match(/^Digit(\d)$/);
+  if (!match) {
+    return { exists: false };
+  }
+  return { exists: true, value: Number(match[1]) };
+}
