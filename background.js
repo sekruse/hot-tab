@@ -103,7 +103,7 @@ async function findTab(pin, key, keysetId) {
   console.log(`Found ${tabs.length} tabs matching ${pin.urlPattern }`);
   if (tabs.length > 0) {
     const tab = tabs[0];
-    if (key && keysetId) {
+    if (key && keysetId != null) {
       await setPin(key, keysetId, tab, {
         title: pin.title,
         favIconUrl: pin.favIconUrl,
