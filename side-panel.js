@@ -7,7 +7,7 @@ const background = new Client(['getState', 'setActiveKeysetId', 'listPins', 'upd
 
 async function refreshPinnedTabs() {
   for (let keysetId = 0; keysetId < 10; keysetId++) {
-    const pins = await background.listPins({ keysetId });
+    const pins = await background.listPins({ keysetId, withoutGlobal: true });
     const pinnedTabsList = document.getElementById(`pinnedTabsList${keysetId}`);
     pinnedTabsList.innerHTML = '';
     Object.keys(pins).sort().forEach((key) => {

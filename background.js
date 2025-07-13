@@ -1,26 +1,13 @@
 import { Server, UserException } from './lpc.js';
 import { Cache } from './storage.js';
+import { Keyset, LayeredKeyset } from './keys.js';
 
 const GLOBAL_KEYSET_ID = 0;
 const HISTORY_KEY = 'Backspace';
 
 const cache = new Cache();
 
-async function updatePin(key, keysetId, updates) {
-  const keysets = await cache.getKeysets();
-  const pin = keysets.get(keysetId, key);
-  ['title', 'url', 'urlPattern'].forEach(p => {
-    if (p in updates) {
-      pin[p] = updates[p];
-    }
-  });
-  if (('key' in updates && updates.key !== key) || ('keysetId' in updates && updates.keysetId != keysetId)) {
-    keysets.remove(keysetId, key);
-  }
-  keysets.set(updates.keysetId || keysetId, updates.key || key, pin);
-}
-
-async function findTab(pin, key, keysetId) {
+async function findTab(pin, keyRef) {
   // First, try to retrieve the pinned tab.
   if (pin.tabId !== undefined) {
     try {
@@ -34,30 +21,32 @@ async function findTab(pin, key, keysetId) {
   console.log(`Found ${tabs.length} tabs matching ${pin.urlPattern }`);
   if (tabs.length > 0) {
     const tab = tabs[0];
-    await pinTab(key, keysetId, tab, {
+    pin = createPin(tab, {
       title: pin.title,
       favIconUrl: pin.favIconUrl,
       url: pin.url,
       urlPattern: pin.urlPattern,
     });
+    const keysets = await cache.getKeysets();
+    keysets.set(keyRef, pin);
     return tab;
   }
   // If none, mark the pin as dangling.
   delete pin.tabId;
   const keysets = await cache.getKeysets();
-  keysets.set(keysetId, key, pin);
+  keysets.set(keyRef, pin);
   return null;
 }
 
-async function listPins(keysetId) {
+async function listPins(keysetIds) {
   const keysets = await cache.getKeysets();
-  const refreshedPins = await Promise.all(keysets.getKeys(keysetId).map(async (key) => {
-    const pin = keysets.get(keysetId, key);
-    await findTab(pin, key, keysetId);
-    return { key, pin }; 
+  const keyset = keysets.getView(keysetIds);
+  const refreshedPins = await Promise.all(keyset.listEntries().map(async (entry) => {
+    await findTab(entry.value, entry.keyRef);
+    return { keyRef: entry.keyRef, pin: entry.value }; 
   }));
   return refreshedPins.reduce((acc, val) => {
-    acc[val.key] = val.pin;
+    acc[val.keyRef.key] = val.pin;
     return acc;
   }, {});
 }
@@ -66,6 +55,7 @@ async function listPins(keysetId) {
 // Pin a tab to a certain key, so that it can be focused or summoned later.
 async function pinTab(key, keysetId, tab, overrides) {
   const keysets = await cache.getKeysets();
+  const keyset = keysets.getView([GLOBAL_KEYSET_ID, keysetId]);
   let pin = {
     tabId: tab.id,
     windowId: tab.windowId,
@@ -78,18 +68,34 @@ async function pinTab(key, keysetId, tab, overrides) {
   if (overrides) {
     pin = {...pin, ...overrides};
   }
-  keysets.set(keysetId, key, pin);
+  return keyset.set(key, pin);
 }
 
+function createPin(tab, overrides) {
+  let pin = {
+    tabId: tab.id,
+    windowId: tab.windowId,
+    index: tab.index,
+    title: tab.title,
+    url: tab.url,
+    urlPattern: tab.url,
+    favIconUrl: tab.favIconUrl,
+  };
+  if (overrides) {
+    pin = {...pin, ...overrides};
+  }
+  return pin;
+}
 
 // Bring a pinned tab to the focus, possibly shifting focus to its window.
 async function focusTab(key, keysetId, options) {
   const keysets = await cache.getKeysets();
-  const pin = keysets.get(keysetId, key);
+  const keyset = keysets.getView([GLOBAL_KEYSET_ID, keysetId]);
+  const pin = keyset.get(key);
   if (!pin) {
-    throw new UserException(`No tab pinned for ${key} in keyset ${keysetId}.`);
+    throw new UserException(`There is no pin at ${key} in keyset ${keysetId}.`);
   }
-  let pinnedTab = await findTab(pin, key, keysetId);
+  let pinnedTab = await findTab(pin, { key, keysetId });
   const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
 
   if (pinnedTab === null) {
@@ -114,7 +120,7 @@ async function focusTab(key, keysetId, options) {
     pin.tabId = pinnedTab.id;
     pin.windowId = pinnedTab.windowId;
     pin.index = pinnedTab.index;
-    keysets.set(keysetId, key, pin);
+    keyset.set(key, pin);
   }
 
   if (currentTab.id === pinnedTab.id) {
@@ -134,7 +140,10 @@ async function focusTab(key, keysetId, options) {
   }
   await chrome.windows.update(pinnedTab.windowId, { focused: true });
 
-  pinTab(HISTORY_KEY, GLOBAL_KEYSET_ID, currentTab)
+  keysets.set({
+    key: HISTORY_KEY,
+    keysetId: GLOBAL_KEYSET_ID,
+  }, createPin(currentTab));
 }
 
 
@@ -150,17 +159,41 @@ const server = new Server({
   },
   'pinTab': async (args) => {
     const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-    await pinTab(args.key, args.keysetId, currentTab);
+    const keysets = await cache.getKeysets();
+    const keyset = keysets.getView([GLOBAL_KEYSET_ID, args.keysetId]);
+    const pin = createPin(currentTab);
+    const keysetId = keyset.set(args.key, pin);
     await cache.flush();
+    return { keysetId };
   },
   'updatePin': async (args) => {
-    await updatePin(args.key, args.keysetId, args.updates);
+    const keysets = await cache.getKeysets();
+    const srcRef = {
+      keysetId: args.keysetId,
+      key: args.key,
+    };
+    const dstRef = {
+      keysetId: args.updates.keysetId || srcRef.keysetId,
+      key: args.updates.key || srcRef.key,
+    };
+    const pin = keysets.get(srcRef);
+    ['title', 'url', 'urlPattern'].forEach(p => {
+      if (p in args.updates) {
+        pin[p] = args.updates[p];
+      }
+    });
+    if (srcRef.keysetId !== dstRef.keysetId || srcRef.key !== dstRef.key) {
+      keysets.remove(srcRef);
+    }
+    keysets.set(dstRef, pin);
     await cache.flush();
   },
   'removePin': async (args) => {
     const keysets = await cache.getKeysets();
-    keysets.remove(args.keysetId, args.key);
+    const keyset = keysets.getView([GLOBAL_KEYSET_ID, args.keysetId]);
+    const keysetId = keyset.remove(args.key);
     await cache.flush();
+    return { keysetId };
   },
   'focusTab': async (args) => {
     await focusTab(args.key, args.keysetId);
@@ -171,7 +204,8 @@ const server = new Server({
     await cache.flush();
   },
   'listPins': async (args) => {
-    const pins = await listPins(args.keysetId);
+    const keysetIds = args.withoutGlobal ? [args.keysetId] : [GLOBAL_KEYSET_ID, args.keysetId]
+    const pins = await listPins(keysetIds);
     await cache.flush();
     return pins;
   },
