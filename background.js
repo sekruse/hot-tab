@@ -1,6 +1,5 @@
 import { Server, UserException } from './lpc.js';
 import { Cache } from './storage.js';
-import { Keyset, LayeredKeyset } from './keys.js';
 
 const GLOBAL_KEYSET_ID = 0;
 const HISTORY_KEY = 'Backspace';
