@@ -8,6 +8,9 @@ export const keyCodeToHTML = (() => {
   cs.set('Backspace', '&#9003;');
   cs.set('Semicolon', ';');
   cs.set('Quote', "'");
+  cs.set('Comma', ",");
+  cs.set('Period', ".");
+  cs.set('Slash', "/");
   'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach((ch) => cs.set(`Key${ch}`, ch));
   '1234567890'.split('').forEach((d) => cs.set(`Digit${d}`, d));
   return cs;
@@ -39,4 +42,12 @@ export function createIcon(pin, extraClasses) {
   });
   icon.setAttribute('src', pin.favIconUrl)
   return icon;
+}
+
+export function parseDigitKeycode(keycode) {
+  const match = keycode.match(/^Digit(\d)$/);
+  if (!match) {
+    return { exists: false };
+  }
+  return { exists: true, value: Number(match[1]) };
 }

@@ -1,56 +1,12 @@
 import { Server, UserException } from './lpc.js';
-// Maps key codes to pinned tabs.
-let pinCache = null;
+import { Cache } from './storage.js';
 
-async function getPin(key) {
-  if (pinCache === null) {
-    const loaded = await chrome.storage.local.get('pins');
-    pinCache = loaded.pins || {};
-  }
-  return pinCache[key];
-}
+const GLOBAL_KEYSET_ID = 0;
+const HISTORY_KEY = 'Backspace';
 
-async function removePin(key) {
-  // Check if work is necessary but also make sure that pinCache is loaded.
-  if (!await getPin(key)) {
-    return;
-  }
-  delete pinCache[key];
-  await chrome.storage.local.set({ pins: pinCache });
-}
+const cache = new Cache();
 
-async function setPin(key, tab, overrides) {
-  await getPin(key); // Ensure pinCache is loaded.
-  let pin = {
-    tabId: tab.id,
-    windowId: tab.windowId,
-    index: tab.index,
-    title: tab.title,
-    url: tab.url,
-    urlPattern: tab.url,
-    favIconUrl: tab.favIconUrl,
-  };
-  if (overrides) {
-    pin = {...pin, ...overrides};
-  }
-  pinCache[key] = pin;
-  await chrome.storage.local.set({ pins: pinCache });
-}
-
-async function updatePin(key, updates) {
-  const pin = await getPin(key); // Ensure pinCache is loaded.
-  ['title', 'url', 'urlPattern'].forEach(p => {
-    if (p in updates) {
-      pin[p] = updates[p];
-    }
-  });
-  if ('key' in updates && updates.key !== key) {
-    delete pinCache[key];
-  }
-  await chrome.storage.local.set({ pins: pinCache });
-}
-
-async function findTab(pin, key) {
+async function findTab(pin, keyRef) {
   // First, try to retrieve the pinned tab.
   if (pin.tabId !== undefined) {
     try {
@@ -64,139 +20,194 @@ async function findTab(pin, key) {
   console.log(`Found ${tabs.length} tabs matching ${pin.urlPattern }`);
   if (tabs.length > 0) {
     const tab = tabs[0];
-    if (key) {
-      await setPin(key, tab, {
-        title: pin.title,
-        favIconUrl: pin.favIconUrl,
-        url: pin.url,
-        urlPattern: pin.urlPattern,
-      });
-    }
-    return tab;
-  }
-  return null;
-}
-
-async function listPins() {
-  await getPin('dummy');
-  await Promise.all(Object.keys(pinCache).map(async (key) => {
-    const pin = pinCache[key];
-    const tab = await findTab(pin, key);
-    if (!tab) {
-      delete pin.tabId;
-      delete pin.windowId;
-      delete pin.index;
-    }
-  }));
-  return pinCache;
-}
-
-
-// Pin a tab to a certain key, so that it can be focused or summoned later.
-async function pinTab(args, tab) {
-  if (!tab) {
-    const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-    tab = currentTab
-  }
-  await setPin(args.key, tab);
-}
-
-// Recreate a pinned tab.
-async function resurrectTab(pin) {
-  console.log(`Resurrecting tab for ${JSON.stringify(pin)}...`);
-  let window;
-  try {
-    window = await chrome.windows.get(pin.windowId)
-  } catch (error) {
-    window = await chrome.windows.getLastFocused();
-  }
-  console.log(`Creating the tab in ${JSON.stringify(window)}...`);
-  return chrome.tabs.create({
-    url: pin.url,
-    windowId: window.id,
-  })
-}
-
-
-// Bring a pinned tab to the focus, possibly shifting focus to its window.
-async function focusTab(args) {
-  const pin = await getPin(args.key);
-  if (!pin) {
-    throw new UserException(`No tab pinned for ${args.key}.`);
-  }
-  let pinnedTab = await findTab(pin, args.key);
-  if (pinnedTab === null) {
-    pinnedTab = await resurrectTab(pin);
-    // At this point, the tab has been created but it's loading the URL is likely pending.
-    // So we update only basic properties of our pin.
-    await setPin(args.key, pinnedTab, {
+    pin = createPin(tab, {
       title: pin.title,
       favIconUrl: pin.favIconUrl,
       url: pin.url,
       urlPattern: pin.urlPattern,
     });
+    const keysets = await cache.getKeysets();
+    keysets.set(keyRef, pin);
+    return tab;
   }
+  // If none, mark the pin as dangling.
+  delete pin.tabId;
+  const keysets = await cache.getKeysets();
+  keysets.set(keyRef, pin);
+  return null;
+}
+
+async function listPins(keysetIds) {
+  const keysets = await cache.getKeysets();
+  const keyset = keysets.getView(keysetIds);
+  const refreshedPins = await Promise.all(keyset.listEntries().map(async (entry) => {
+    await findTab(entry.value, entry.keyRef);
+    return { keyRef: entry.keyRef, pin: entry.value }; 
+  }));
+  return refreshedPins.reduce((acc, val) => {
+    acc[val.keyRef.key] = val.pin;
+    return acc;
+  }, {});
+}
+
+
+// Pin a tab to a certain key, so that it can be focused or summoned later.
+async function pinTab(key, keysetId, tab, overrides) {
+  const keysets = await cache.getKeysets();
+  const keyset = keysets.getView([GLOBAL_KEYSET_ID, keysetId]);
+  let pin = {
+    tabId: tab.id,
+    windowId: tab.windowId,
+    index: tab.index,
+    title: tab.title,
+    url: tab.url,
+    urlPattern: tab.url,
+    favIconUrl: tab.favIconUrl,
+  };
+  if (overrides) {
+    pin = {...pin, ...overrides};
+  }
+  return keyset.set(key, pin);
+}
+
+function createPin(tab, overrides) {
+  let pin = {
+    tabId: tab.id,
+    windowId: tab.windowId,
+    index: tab.index,
+    title: tab.title,
+    url: tab.url,
+    urlPattern: tab.url,
+    favIconUrl: tab.favIconUrl,
+  };
+  if (overrides) {
+    pin = {...pin, ...overrides};
+  }
+  return pin;
+}
+
+// Bring a pinned tab to the focus, possibly shifting focus to its window.
+async function focusTab(key, keysetId, options) {
+  const keysets = await cache.getKeysets();
+  const keyset = keysets.getView([GLOBAL_KEYSET_ID, keysetId]);
+  const pin = keyset.get(key);
+  if (!pin) {
+    throw new UserException(`There is no pin at ${key} in keyset ${keysetId}.`);
+  }
+  let pinnedTab = await findTab(pin, { key, keysetId });
   const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+
+  if (pinnedTab === null) {
+    const createOptions = {};
+    if (options?.summon) {
+      createOptions.windowId = currentTab.windowId;
+      createOptions.index = currentTab.index + 1;
+    } else {
+      let window;
+      try {
+        window = await chrome.windows.get(pin.windowId)
+      } catch (error) {
+        window = await chrome.windows.getLastFocused();
+      }
+      createOptions.windowId = window.id;
+    }
+    pinnedTab = await chrome.tabs.create({
+      url: pin.url,
+      windowId: currentTab.windowId,
+      ...createOptions,
+    });
+    pin.tabId = pinnedTab.id;
+    pin.windowId = pinnedTab.windowId;
+    pin.index = pinnedTab.index;
+    keyset.set(key, pin);
+  }
+
   if (currentTab.id === pinnedTab.id) {
     return;
+  }
+  // If the tab should be "summoned", that means we should move it to the current location.
+  if (options?.summon) {
+    if ((currentTab.windowId !== pinnedTab.windowId) || (Math.abs(currentTab.index - pinnedTab.index) > 1)) {
+      pinnedTab = await chrome.tabs.move(pinnedTab.id, {
+        index: currentTab.index + 1,
+        windowId: currentTab.windowId,
+      });
+    }
   }
   if (!pinnedTab.active) {
     pinnedTab = await chrome.tabs.update(pinnedTab.id, { active: true });
   }
   await chrome.windows.update(pinnedTab.windowId, { focused: true });
 
-  // Fire and forget.
-  pinTab({ key: 'Backspace' }, currentTab)
-}
-
-// Bring a pinned tab to the current window, right next to the current tab.
-async function summonTab(args) {
-  const pin = await getPin(args.key);
-  if (!pin) {
-    throw new Error(`No tab pinned for ${args.key}.`);
-  }
-  let pinnedTab;
-  try {
-    pinnedTab = await chrome.tabs.get(pin.tabId);
-  } catch (error) {
-    pinnedTab = await resurrectTab(pin);
-    // At this point, the tab has been created but it's loading the URL is likely pending.
-    // So we update only basic properties of our pin.
-    await setPin(args.key, pinnedTab, {
-      title: pin.title,
-      favIconUrl: pin.favIconUrl,
-      url: pin.url,
-      urlPattern: pin.urlPattern,
-    });
-  }
-  const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-  if (currentTab.id === pinnedTab.id) {
-    return;
-  }
-  if ((currentTab.windowId !== pinnedTab.windowId) || (Math.abs(currentTab.index - pinnedTab.index) > 1)) {
-    pinnedTab = await chrome.tabs.move(pinnedTab.id, {
-      index: currentTab.index + 1,
-      windowId: currentTab.windowId,
-    });
-  }
-  pinnedTab = await chrome.tabs.update(pinnedTab.id, { active: true });
-
-  // Fire and forget.
-  pinTab({ key: 'Backspace' }, currentTab)
+  keysets.set({
+    key: HISTORY_KEY,
+    keysetId: GLOBAL_KEYSET_ID,
+  }, createPin(currentTab));
 }
 
 
 const server = new Server({
-  'pinTab': pinTab,
+  'getState': async (args) => {
+    const state = await cache.getState();
+    return state.data;
+  },
+  'setActiveKeysetId': async (args) => {
+    const state = await cache.getState();
+    state.setKeysetId(args.keysetId);
+    await cache.flush();
+  },
+  'pinTab': async (args) => {
+    const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    const keysets = await cache.getKeysets();
+    const keyset = keysets.getView([GLOBAL_KEYSET_ID, args.keysetId]);
+    const pin = createPin(currentTab);
+    const keysetId = keyset.set(args.key, pin);
+    await cache.flush();
+    return { keysetId };
+  },
   'updatePin': async (args) => {
-    await updatePin(args.key, args.updates);
+    const keysets = await cache.getKeysets();
+    const srcRef = {
+      keysetId: args.keysetId,
+      key: args.key,
+    };
+    const dstRef = {
+      keysetId: args.updates.keysetId || srcRef.keysetId,
+      key: args.updates.key || srcRef.key,
+    };
+    const pin = keysets.get(srcRef);
+    ['title', 'url', 'urlPattern'].forEach(p => {
+      if (p in args.updates) {
+        pin[p] = args.updates[p];
+      }
+    });
+    if (srcRef.keysetId !== dstRef.keysetId || srcRef.key !== dstRef.key) {
+      keysets.remove(srcRef);
+    }
+    keysets.set(dstRef, pin);
+    await cache.flush();
   },
   'removePin': async (args) => {
-    await removePin(args.key);
+    const keysets = await cache.getKeysets();
+    const keyset = keysets.getView([GLOBAL_KEYSET_ID, args.keysetId]);
+    const keysetId = keyset.remove(args.key);
+    await cache.flush();
+    return { keysetId };
   },
-  'focusTab': focusTab,
-  'summonTab': summonTab,
-  'listPins': listPins,
+  'focusTab': async (args) => {
+    await focusTab(args.key, args.keysetId);
+    await cache.flush();
+  },
+  'summonTab': async (args) => {
+    await focusTab(args.key, args.keysetId, { summon: true });
+    await cache.flush();
+  },
+  'listPins': async (args) => {
+    const keysetIds = args.withoutGlobal ? [args.keysetId] : [GLOBAL_KEYSET_ID, args.keysetId]
+    const pins = await listPins(keysetIds);
+    await cache.flush();
+    return pins;
+  },
 });
 
 chrome.runtime.onMessage.addListener(server.serve.bind(server));
