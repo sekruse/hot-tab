@@ -1,3 +1,5 @@
+import { UserException } from './lpc.js';
+
 export const keyCodeToHTML = (() => {
   const cs = new Map();
   cs.set('Minus', '-');
@@ -15,6 +17,7 @@ export const keyCodeToHTML = (() => {
   '1234567890'.split('').forEach((d) => cs.set(`Digit${d}`, d));
   return cs;
 })();
+const htmlToKeyCode = new Map(keyCodeToHTML.entries().map(([k, v]) => [v, k]));
 
 export function createIcon(pin, extraClasses) {
   const iconFallback = document.createElement('div');
@@ -51,3 +54,69 @@ export function parseDigitKeycode(keycode) {
   }
   return { exists: true, value: Number(match[1]) };
 }
+
+// Special character in key combinations to represent a key ref (<key> or <digit><key>).
+const COMBO_ARG_KEY_REF = '@';
+
+// A ComboTrie stores key combinations in a trie and associates them with actions.
+export class ComboTrie {
+  constructor() {
+    this.root = {};
+  }
+  // Inserts the combination into the trie and associates a value with it.
+  addCombo(code, action) {
+    let node = this.root;
+    for (let i = 0; i < code.length; i++) {
+      const char = code[i];
+      if (char in node) {
+        node = node[char];
+      } else {
+        const child = {};
+        node[char] = child;
+        node = child;
+      }
+    }
+    node.action = action;
+  }
+  // Attempts to match the input against all registered combos.
+  // If a combo has been matched, this method returns the registered value and parsed key ref.
+  // If no combo has been completed yet, `null` is returned.
+  // If no combo matches the input, an exception is raised.
+  match(input) {
+    let node = this.root;
+    let keyRef = {};
+    for (let i = 0; i < input.length; i++) {
+      const char = input[i];
+      if (COMBO_ARG_KEY_REF in node) {
+        if (char.match(/\d/)) {
+          if (keyRef.keysetId != null) {
+            throw new UserException(`Multiple keyset IDs in ${input}.`);
+          }
+          keyRef.keysetId = Number.parseInt(char);
+          continue;
+        }
+        if (char.match(/[a-zA-Z\[\]\\;',./]/)) {
+          if (keyRef.key != null) {
+            throw new UserException(`Multiple keys in ${input}.`);
+          }
+          keyRef.key = htmlToKeyCode.get(char.toUpperCase());
+          node = node[COMBO_ARG_KEY_REF];
+          continue;
+        }
+      }
+      if (char in node) {
+        node = node[char];
+        continue;
+      }
+      throw new UserException(`Unexpected character at position ${i} in "${input}".`);
+    }
+    if (node.action) {
+      return {
+        action: node.action,
+        keyRef: keyRef,
+      };
+    }
+    return null;
+  }
+}
+

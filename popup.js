@@ -1,11 +1,47 @@
-import { keyCodeToHTML, createIcon, parseDigitKeycode } from './keys.js';
+import { keyCodeToHTML, createIcon, parseDigitKeycode, ComboTrie } from './keys.js';
 import { Client } from './lpc.js';
 import toast from './toast.js';
 import tooltip from './tooltip.js';
 
 const background = new Client(['getState', 'setActiveKeysetId', 'listPins', 'pinTab', 'focusTab', 'summonTab', 'removePin']);
 
+// Currently active keyset ID.
 let keysetId;
+
+// Provides the active keyset ID as a fallback value when the key ref doesn't specify one explicitly.
+function withDefaultKeysetId(keyRef) {
+  if (keyRef.keysetId == null) {
+    return {
+      keysetId: keysetId,
+      key: keyRef.key,
+    };
+  }
+  return keyRef;
+}
+
+const combos = new ComboTrie();
+combos.addCombo('g@', (keyRef) => {
+  background.focusTab(withDefaultKeysetId(keyRef));
+  window.close();
+});
+combos.addCombo('G@', (keyRef) => {
+  background.summonTab(withDefaultKeysetId(keyRef));
+  window.close();
+});
+combos.addCombo('d@', (keyRef) => {
+  background.removePin(withDefaultKeysetId(keyRef));
+  refreshPinnedTabs();
+});
+combos.addCombo('p@', (keyRef) => {
+  background.pinTab(withDefaultKeysetId(keyRef));
+  window.close();
+});
+combos.addCombo('q', () => window.close());
+combos.addCombo('e', async () => {
+  const w = await chrome.windows.get(chrome.windows.WINDOW_ID_CURRENT);
+  await chrome.sidePanel.open({ windowId: w.id });
+  window.close();
+});
 
 async function refreshPinnedTabs() {
   const pins = await background.listPins({ keysetId: keysetId });
@@ -30,7 +66,7 @@ async function refreshPinnedTabs() {
   });
 }
 
-async function handleKey(keyCode) {
+async function handleDirectInput(keyCode) {
   if (!keyCodeToHTML.has(keyCode)) {
     return;
   }
@@ -60,15 +96,40 @@ async function handleKey(keyCode) {
   window.close();
 }
 
+// If not null, inputSequence collects key presses.
+let inputSequence;
 function addInputListeners() {
   document.querySelectorAll('[data-keycode]').forEach((key) => {
     key.addEventListener('click', toast.catch(async (event) => {
       const keyCode = event.currentTarget.getAttribute('data-keycode');
-      await handleKey(keyCode);
+      await handleDirectInput(keyCode);
     }));
   });
   document.addEventListener('keydown', toast.catch(async (event) => {
-    await handleKey(event.code);
+    if (inputSequence != null) {
+      inputSequence += event.key;
+      // Hand through input to the direct handler to switch the active keyset.
+      if (event.code.startsWith('Digit')) {
+        handleDirectInput(event.code);
+      }
+      try {
+        const result = combos.match(inputSequence);
+        if (result) {
+          result.action(result.keyRef);
+          inputSequence = null;
+        }
+      } catch (err) {
+        inputSequence = null;
+        throw err;
+      }
+      return;
+    }
+    if (event.code === 'Space') {
+      // Make the input sequence non-null to start a new input sequence.
+      inputSequence = '';
+      return;
+    }
+    await handleDirectInput(event.code);
   }));
 }
 
