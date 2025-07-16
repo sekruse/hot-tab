@@ -176,6 +176,12 @@ const server = new Server({
     keysets.set(dstRef, pin);
     await cache.flush();
   },
+  'clearKeyset': async (args) => {
+    const keysets = await cache.getKeysets();
+    const keyset = keysets.getView([args.keysetId]);
+    keyset.listEntries().forEach((e) => keyset.remove(e.keyRef.key));
+    await cache.flush();
+  },
   'removePin': async (args) => {
     const keysets = await cache.getKeysets();
     const keyset = keysets.getView([GLOBAL_KEYSET_ID, args.keysetId]);

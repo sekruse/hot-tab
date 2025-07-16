@@ -61,6 +61,7 @@ export function parseDigitKeycode(keycode) {
 
 // Special character in key combinations to represent a key ref (<key> or <digit><key>).
 const COMBO_ARG_KEY_REF = '@';
+const COMBO_ARG_KEYSET = '#';
 
 // A ComboTrie stores key combinations in a trie and associates them with actions.
 export class ComboTrie {
@@ -88,30 +89,36 @@ export class ComboTrie {
   // If no combo matches the input, an exception is raised.
   match(input) {
     let node = this.root;
-    let stagingKeyRef = {};
-    const keyRefs = [];
+    let keyRefBuilder = {};
+    const args = [];
     for (let i = 0; i < input.length; i++) {
       const char = input[i];
       if (COMBO_ARG_KEY_REF in node) {
         if (char.match(/\d/)) {
-          if (stagingKeyRef.keysetId != null) {
+          if (keyRefBuilder.keysetId != null) {
             throw new UserException(`Multiple keyset IDs in ${input}.`);
           }
-          stagingKeyRef.keysetId = Number.parseInt(char);
+          keyRefBuilder.keysetId = Number.parseInt(char);
           continue;
         }
         if (char.match(/[a-zA-Z\[\]\\;',./]/)) {
-          if (stagingKeyRef.key != null) {
+          if (keyRefBuilder.key != null) {
             throw new UserException(`Multiple keys in ${input}.`);
           }
-          stagingKeyRef.key = htmlToKeyCode.get(char.toUpperCase());
-          keyRefs.push(stagingKeyRef);
-          stagingKeyRef = {};
+          keyRefBuilder.key = htmlToKeyCode.get(char.toUpperCase());
+          args.push(keyRefBuilder);
+          keyRefBuilder = {};
           node = node[COMBO_ARG_KEY_REF];
           continue;
         }
-      }
-      if (char in node) {
+      } else if (COMBO_ARG_KEYSET in node) {
+        if (char.match(/\d/)) {
+          const keysetId = Number.parseInt(char);
+          args.push({ keysetId });
+          node = node[COMBO_ARG_KEYSET];
+          continue;
+        }
+      } if (char in node) {
         node = node[char];
         continue;
       }
@@ -120,7 +127,7 @@ export class ComboTrie {
     if (node.action) {
       return {
         action: node.action,
-        keyRefs: keyRefs,
+        args: args,
       };
     }
     return null;

@@ -3,7 +3,7 @@ import { Client } from './lpc.js';
 import toast from './toast.js';
 import tooltip from './tooltip.js';
 
-const background = new Client(['getState', 'setActiveKeysetId', 'listPins', 'pinTab', 'focusTab', 'removePin', 'updatePin']);
+const background = new Client(['getState', 'setActiveKeysetId', 'listPins', 'pinTab', 'focusTab', 'clearKeyset', 'removePin', 'updatePin']);
 
 // Currently active keyset ID.
 let keysetId;
@@ -45,6 +45,14 @@ combos.addCombo('m@@', async (srcKeyRef, dstKeyRef) => {
 });
 combos.addCombo('d@', async (keyRef) => {
   await background.removePin(withDefaultKeysetId(keyRef));
+  refreshPinnedTabs();
+});
+combos.addCombo('D#', async (partialKeyRef) => {
+  await background.clearKeyset(partialKeyRef);
+  refreshPinnedTabs();
+});
+combos.addCombo('DD', async () => {
+  await background.clearKeyset({ keysetId });
   refreshPinnedTabs();
 });
 combos.addCombo('p@', async (keyRef) => {
@@ -142,7 +150,7 @@ function addInputListeners() {
       try {
         const result = combos.match(inputSequence);
         if (result) {
-          await result.action(result.keyRefs[0], result.keyRefs[1]);
+          await result.action(result.args[0], result.args[1]);
           inputSequence = null;
         }
       } catch (err) {
