@@ -1,4 +1,4 @@
-import { keyCodeToHTML, createIcon, parseDigitKeycode, ComboTrie } from './keys.js';
+import { keyCodeToHTML, isModifier, createIcon, parseDigitKeycode, ComboTrie } from './keys.js';
 import { Client } from './lpc.js';
 import toast from './toast.js';
 import tooltip from './tooltip.js';
@@ -20,20 +20,20 @@ function withDefaultKeysetId(keyRef) {
 }
 
 const combos = new ComboTrie();
-combos.addCombo('g@', (keyRef) => {
-  background.focusTab(withDefaultKeysetId(keyRef));
+combos.addCombo('g@', async (keyRef) => {
+  await background.focusTab(withDefaultKeysetId(keyRef));
   window.close();
 });
-combos.addCombo('G@', (keyRef) => {
-  background.focusTab({ ...withDefaultKeysetId(keyRef), opts: { summon: true }});
+combos.addCombo('G@', async (keyRef) => {
+  await background.focusTab({ ...withDefaultKeysetId(keyRef), opts: { summon: true }});
   window.close();
 });
-combos.addCombo('d@', (keyRef) => {
-  background.removePin(withDefaultKeysetId(keyRef));
+combos.addCombo('d@', async (keyRef) => {
+  await background.removePin(withDefaultKeysetId(keyRef));
   refreshPinnedTabs();
 });
-combos.addCombo('p@', (keyRef) => {
-  background.pinTab(withDefaultKeysetId(keyRef));
+combos.addCombo('p@', async (keyRef) => {
+  await background.pinTab(withDefaultKeysetId(keyRef));
   window.close();
 });
 combos.addCombo('q', () => window.close());
@@ -107,6 +107,9 @@ function addInputListeners() {
   });
   document.addEventListener('keydown', toast.catch(async (event) => {
     if (inputSequence != null) {
+      if (isModifier(event.code)) {
+        return;
+      }
       inputSequence += event.key;
       // Hand through input to the direct handler to switch the active keyset.
       if (event.code.startsWith('Digit')) {
@@ -115,7 +118,7 @@ function addInputListeners() {
       try {
         const result = combos.match(inputSequence);
         if (result) {
-          result.action(result.keyRef);
+          await result.action(result.keyRef);
           inputSequence = null;
         }
       } catch (err) {

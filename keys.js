@@ -19,6 +19,10 @@ export const keyCodeToHTML = (() => {
 })();
 const htmlToKeyCode = new Map(keyCodeToHTML.entries().map(([k, v]) => [v, k]));
 
+export function isModifier(keyCode) {
+  return keyCode.match(/^((Shift|Control|Alt|Meta)(Left|Right)?|CapsLock)$/) ? true : false;
+}
+
 export function createIcon(pin, extraClasses) {
   const iconFallback = document.createElement('div');
   iconFallback.classList.add('icon-fallback');
