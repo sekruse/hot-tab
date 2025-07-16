@@ -125,6 +125,11 @@ function addInputListeners() {
     }));
   });
   document.addEventListener('keydown', toast.catch(async (event) => {
+    if (event.code === 'Space') {
+      // Make the input sequence non-null to start a new input sequence.
+      inputSequence = '';
+      return;
+    }
     if (inputSequence != null) {
       if (isModifier(event.code)) {
         return;
@@ -144,11 +149,6 @@ function addInputListeners() {
         inputSequence = null;
         throw err;
       }
-      return;
-    }
-    if (event.code === 'Space') {
-      // Make the input sequence non-null to start a new input sequence.
-      inputSequence = '';
       return;
     }
     await handleDirectInput(event.code);
