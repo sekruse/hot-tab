@@ -160,8 +160,9 @@ const server = new Server({
       key: args.key,
     };
     const dstRef = {
-      keysetId: args.updates.keysetId || srcRef.keysetId,
-      key: args.updates.key || srcRef.key,
+      ...srcRef,
+      keysetId: args.updates.keysetId,
+      key: args.updates.key,
     };
     const pin = keysets.get(srcRef);
     ['title', 'url', 'urlPattern'].forEach(p => {

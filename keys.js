@@ -20,7 +20,7 @@ export const keyCodeToHTML = (() => {
 const htmlToKeyCode = new Map(keyCodeToHTML.entries().map(([k, v]) => [v, k]));
 
 export function isModifier(keyCode) {
-  return keyCode.match(/^((Shift|Control|Alt|Meta)(Left|Right)?|CapsLock)$/) ? true : false;
+  return keyCode.match(/^((Shift|Control|Alt|Meta)(Left|Right)|CapsLock)$/) ? true : false;
 }
 
 export function createIcon(pin, extraClasses) {
@@ -88,22 +88,25 @@ export class ComboTrie {
   // If no combo matches the input, an exception is raised.
   match(input) {
     let node = this.root;
-    let keyRef = {};
+    let stagingKeyRef = {};
+    const keyRefs = [];
     for (let i = 0; i < input.length; i++) {
       const char = input[i];
       if (COMBO_ARG_KEY_REF in node) {
         if (char.match(/\d/)) {
-          if (keyRef.keysetId != null) {
+          if (stagingKeyRef.keysetId != null) {
             throw new UserException(`Multiple keyset IDs in ${input}.`);
           }
-          keyRef.keysetId = Number.parseInt(char);
+          stagingKeyRef.keysetId = Number.parseInt(char);
           continue;
         }
         if (char.match(/[a-zA-Z\[\]\\;',./]/)) {
-          if (keyRef.key != null) {
+          if (stagingKeyRef.key != null) {
             throw new UserException(`Multiple keys in ${input}.`);
           }
-          keyRef.key = htmlToKeyCode.get(char.toUpperCase());
+          stagingKeyRef.key = htmlToKeyCode.get(char.toUpperCase());
+          keyRefs.push(stagingKeyRef);
+          stagingKeyRef = {};
           node = node[COMBO_ARG_KEY_REF];
           continue;
         }
@@ -117,7 +120,7 @@ export class ComboTrie {
     if (node.action) {
       return {
         action: node.action,
-        keyRef: keyRef,
+        keyRefs: keyRefs,
       };
     }
     return null;
