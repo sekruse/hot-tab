@@ -25,11 +25,11 @@ combos.addCombo('g@', async (keyRef) => {
   window.close();
 });
 combos.addCombo('G@', async (keyRef) => {
-  await background.focusTab({ ...withDefaultKeysetId(keyRef), opts: { summon: true }});
+  await background.focusTab({ ...withDefaultKeysetId(keyRef), options: { summon: true }});
   window.close();
 });
 combos.addCombo('f@', async (keyRef) => {
-  await background.focusTab({ ...withDefaultKeysetId(keyRef), opts: { recreate: true }});
+  await background.focusTab({ ...withDefaultKeysetId(keyRef), options: { recreate: true }});
   window.close();
 });
 combos.addCombo('d@', async (keyRef) => {
@@ -37,7 +37,11 @@ combos.addCombo('d@', async (keyRef) => {
   refreshPinnedTabs();
 });
 combos.addCombo('p@', async (keyRef) => {
-  await background.pinTab(withDefaultKeysetId(keyRef));
+  await background.pinTab({ ...withDefaultKeysetId(keyRef), options: { pinScope: 'origin' }});
+  window.close();
+});
+combos.addCombo('P@', async (keyRef) => {
+  await background.pinTab({ ...withDefaultKeysetId(keyRef), options: { pinScope: 'page' }});
   window.close();
 });
 combos.addCombo('q', () => window.close());
@@ -86,9 +90,9 @@ async function handleDirectInput(keyCode) {
     return;
   }
   if (event.ctrlKey) {
-    await background.pinTab({ key: keyCode, keysetId: keysetId });
+    await background.pinTab({ key: keyCode, keysetId: keysetId, options: { pinScope: 'origin' }});
   } else if (event.shiftKey) {
-    await background.focusTab({ key: keyCode, keysetId: keysetId, opts: { summon: true }});
+    await background.focusTab({ key: keyCode, keysetId: keysetId, options: { summon: true }});
   } else if (event.altKey) {
     await background.removePin({ key: keyCode, keysetId: keysetId });
     toast.show(`Pin for ${keyCode} removed.`, 3000);
