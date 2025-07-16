@@ -159,11 +159,13 @@ const server = new Server({
       keysetId: args.keysetId,
       key: args.key,
     };
-    const dstRef = {
-      ...srcRef,
-      keysetId: args.updates.keysetId,
-      key: args.updates.key,
-    };
+    const dstRef = { ...srcRef };
+    if (args.updates.keysetId != null) {
+      dstRef.keysetId = args.updates.keysetId;
+    }
+    if (args.updates.key != null) {
+      dstRef.key = args.updates.key;
+    }
     const pin = keysets.get(srcRef);
     ['title', 'url', 'urlPattern'].forEach(p => {
       if (p in args.updates) {
