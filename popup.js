@@ -3,7 +3,7 @@ import { Client } from './lpc.js';
 import toast from './toast.js';
 import tooltip from './tooltip.js';
 
-const background = new Client(['getState', 'setActiveKeysetId', 'listPins', 'pinTab', 'focusTab', 'summonTab', 'removePin']);
+const background = new Client(['getState', 'setActiveKeysetId', 'listPins', 'pinTab', 'focusTab', 'removePin']);
 
 // Currently active keyset ID.
 let keysetId;
@@ -25,7 +25,7 @@ combos.addCombo('g@', (keyRef) => {
   window.close();
 });
 combos.addCombo('G@', (keyRef) => {
-  background.summonTab(withDefaultKeysetId(keyRef));
+  background.focusTab({ ...withDefaultKeysetId(keyRef), opts: { summon: true }});
   window.close();
 });
 combos.addCombo('d@', (keyRef) => {
@@ -84,7 +84,7 @@ async function handleDirectInput(keyCode) {
   if (event.ctrlKey) {
     await background.pinTab({ key: keyCode, keysetId: keysetId });
   } else if (event.shiftKey) {
-    await background.summonTab({ key: keyCode, keysetId: keysetId });
+    await background.focusTab({ key: keyCode, keysetId: keysetId, opts: { summon: true }});
   } else if (event.altKey) {
     await background.removePin({ key: keyCode, keysetId: keysetId });
     toast.show(`Pin for ${keyCode} removed.`, 3000);

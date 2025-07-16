@@ -195,11 +195,7 @@ const server = new Server({
     return { keysetId };
   },
   'focusTab': async (args) => {
-    await focusTab(args.key, args.keysetId);
-    await cache.flush();
-  },
-  'summonTab': async (args) => {
-    await focusTab(args.key, args.keysetId, { summon: true });
+    await focusTab(args.key, args.keysetId, args.opts);
     await cache.flush();
   },
   'listPins': async (args) => {
