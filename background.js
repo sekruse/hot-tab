@@ -106,6 +106,8 @@ async function focusTab(key, keysetId, options) {
     pin.windowId = pinnedTab.windowId;
     pin.index = pinnedTab.index;
     keyset.set(key, pin);
+  } else if (options?.reset) {
+    await chrome.tabs.update(pinnedTab.id, { url: pin.url });
   }
 
   if (currentTab.id === pinnedTab.id) {
