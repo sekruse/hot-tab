@@ -97,7 +97,7 @@ async function focusTab(key, keysetId, options) {
   let pinnedTab = await findTab(pin, { key, keysetId });
   const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
 
-  if (pinnedTab === null) {
+  if (pinnedTab === null || options?.recreate) {
     const createOptions = {};
     if (options?.summon) {
       createOptions.windowId = currentTab.windowId;

@@ -28,6 +28,10 @@ combos.addCombo('G@', async (keyRef) => {
   await background.focusTab({ ...withDefaultKeysetId(keyRef), opts: { summon: true }});
   window.close();
 });
+combos.addCombo('f@', async (keyRef) => {
+  await background.focusTab({ ...withDefaultKeysetId(keyRef), opts: { recreate: true }});
+  window.close();
+});
 combos.addCombo('d@', async (keyRef) => {
   await background.removePin(withDefaultKeysetId(keyRef));
   refreshPinnedTabs();
