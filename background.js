@@ -133,6 +133,19 @@ async function focusTab(key, keysetId, options) {
   }, createPin(currentTab));
 }
 
+async function closeTab(key, keysetId) {
+  const keysets = await cache.getKeysets();
+  const keyset = keysets.getView([GLOBAL_KEYSET_ID, keysetId]);
+  const pin = keyset.get(key);
+  if (!pin) {
+    throw new UserException(`There is no pin at ${key} in keyset ${keysetId}.`);
+  }
+  const pinnedTab = await findTab(pin, { key, keysetId });
+  if (!pinnedTab) {
+    return;
+  }
+  await chrome.tabs.remove(pinnedTab.id);
+}
 
 const server = new Server({
   'getState': async (args) => {
@@ -193,6 +206,10 @@ const server = new Server({
   },
   'focusTab': async (args) => {
     await focusTab(args.key, args.keysetId, args.options);
+    await cache.flush();
+  },
+  'closeTab': async (args) => {
+    await closeTab(args.key, args.keysetId);
     await cache.flush();
   },
   'listPins': async (args) => {

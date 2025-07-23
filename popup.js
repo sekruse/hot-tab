@@ -3,7 +3,12 @@ import { Client } from './lpc.js';
 import toast from './toast.js';
 import tooltip from './tooltip.js';
 
-const background = new Client(['getState', 'setActiveKeysetId', 'listPins', 'pinTab', 'focusTab', 'clearKeyset', 'removePin', 'updatePin']);
+const background = new Client([
+  'getState', 'setActiveKeysetId',
+  'listPins', 'pinTab',
+  'focusTab', 'closeTab',
+  'clearKeyset', 'removePin',
+  'updatePin']);
 
 // Currently active keyset ID.
 let keysetId;
@@ -35,6 +40,10 @@ combos.addCombo('f@', async (keyRef) => {
 combos.addCombo('r@', async (keyRef) => {
   await background.focusTab({ ...withDefaultKeysetId(keyRef), options: { reset: true }});
   window.close();
+});
+combos.addCombo('x@', async (keyRef) => {
+  await background.closeTab({ ...withDefaultKeysetId(keyRef), options: { reset: true }});
+  refreshPinnedTabs();
 });
 combos.addCombo('m@@', async (srcKeyRef, dstKeyRef) => {
   await background.updatePin({
