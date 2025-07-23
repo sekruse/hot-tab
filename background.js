@@ -4,6 +4,13 @@ import { Cache } from './storage.js';
 const GLOBAL_KEYSET_ID = 0;
 const HISTORY_KEY = 'Backspace';
 
+const COMMAND_KEYS = {
+  "command-01": "KeyA",
+  "command-02": "KeyS",
+  "command-03": "KeyD",
+  "command-04": "KeyF",
+}
+
 const cache = new Cache();
 
 async function findTab(pin, keyRef) {
@@ -221,3 +228,17 @@ const server = new Server({
 });
 
 chrome.runtime.onMessage.addListener(server.serve.bind(server));
+
+chrome.commands.onCommand.addListener(async (command) => {
+  console.log(`Command triggered: ${command}`);
+  const key = COMMAND_KEYS[command];
+  if (!key) {
+    throw new UserException(`No key registered for ${command}.`);
+  }
+  const state = await cache.getState();
+  const result = server.execute({
+    command: 'focusTab',
+    args: { key: key, keysetId: state.data.keysetId, options: {} },
+  });
+  console.log(`Result: ${result}`);
+})
