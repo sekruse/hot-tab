@@ -1,4 +1,5 @@
-import { keyCodeToHTML, isModifier, createIcon, parseDigitKeycode, ComboTrie } from './keys.js';
+import { keyCodeToHTML, isModifier, createIcon, parseDigitKeycode } from './keys.js';
+import combos from './combos.js';
 import { Client } from './lpc.js';
 import toast from './toast.js';
 import tooltip from './tooltip.js';
@@ -24,60 +25,27 @@ function withDefaultKeysetId(keyRef) {
   return keyRef;
 }
 
-const combos = new ComboTrie();
-combos.addCombo('g@', async (keyRef) => {
-  await background.focusTab(withDefaultKeysetId(keyRef));
-  window.close();
-});
-combos.addCombo('G@', async (keyRef) => {
-  await background.focusTab({ ...withDefaultKeysetId(keyRef), options: { summon: true }});
-  window.close();
-});
-combos.addCombo('f@', async (keyRef) => {
-  await background.focusTab({ ...withDefaultKeysetId(keyRef), options: { recreate: true }});
-  window.close();
-});
-combos.addCombo('r@', async (keyRef) => {
-  await background.focusTab({ ...withDefaultKeysetId(keyRef), options: { reset: true }});
-  window.close();
-});
-combos.addCombo('x@', async (keyRef) => {
-  await background.closeTab({ ...withDefaultKeysetId(keyRef), options: { reset: true }});
-  refreshPinnedTabs();
-});
-combos.addCombo('m@@', async (srcKeyRef, dstKeyRef) => {
-  await background.updatePin({
-    ...withDefaultKeysetId(srcKeyRef),
-    updates: withDefaultKeysetId(dstKeyRef),
+const comboTrie = function() {
+  const buildAction = function(descriptor) {
+    return async function(parsedArgs) {
+      const args = descriptor.argTransformer(parsedArgs, withDefaultKeysetId);
+      await background[descriptor.method](args);
+      if (descriptor.closePopup) {
+        window.close();
+      } else {
+        refreshPinnedTabs();
+      }
+    }
+  };
+  const trie = combos.createDefaultTrie(buildAction);
+  trie.addCombo('q', () => window.close());
+  trie.addCombo('e', async () => {
+    const w = await chrome.windows.get(chrome.windows.WINDOW_ID_CURRENT);
+    await chrome.sidePanel.open({ windowId: w.id });
+    window.close();
   });
-  refreshPinnedTabs();
-});
-combos.addCombo('d@', async (keyRef) => {
-  await background.removePin(withDefaultKeysetId(keyRef));
-  refreshPinnedTabs();
-});
-combos.addCombo('D#', async (partialKeyRef) => {
-  await background.clearKeyset(partialKeyRef);
-  refreshPinnedTabs();
-});
-combos.addCombo('DD', async () => {
-  await background.clearKeyset({ keysetId });
-  refreshPinnedTabs();
-});
-combos.addCombo('p@', async (keyRef) => {
-  await background.pinTab({ ...withDefaultKeysetId(keyRef), options: { pinScope: 'origin' }});
-  window.close();
-});
-combos.addCombo('P@', async (keyRef) => {
-  await background.pinTab({ ...withDefaultKeysetId(keyRef), options: { pinScope: 'page' }});
-  window.close();
-});
-combos.addCombo('q', () => window.close());
-combos.addCombo('e', async () => {
-  const w = await chrome.windows.get(chrome.windows.WINDOW_ID_CURRENT);
-  await chrome.sidePanel.open({ windowId: w.id });
-  window.close();
-});
+  return trie;
+}();
 
 async function refreshPinnedTabs() {
   const pins = await background.listPins({ keysetId: keysetId });
@@ -157,9 +125,9 @@ function addInputListeners() {
         handleDirectInput(event.code);
       }
       try {
-        const result = combos.match(inputSequence);
+        const result = comboTrie.match(inputSequence);
         if (result) {
-          await result.action(result.args[0], result.args[1]);
+          await result.action(result.args);
           inputSequence = null;
         }
       } catch (err) {
@@ -172,7 +140,6 @@ function addInputListeners() {
   }));
 }
 
-
 document.addEventListener('DOMContentLoaded', () => {
   toast.init();
   toast.catch(async () => {
@@ -183,5 +150,4 @@ document.addEventListener('DOMContentLoaded', () => {
     await refreshPinnedTabs();
   })();
 });
-
 
