@@ -1,14 +1,15 @@
 import { Server, UserException } from './lpc.js';
 import { Cache } from './storage.js';
+import combos from './combos.js';
 
 const GLOBAL_KEYSET_ID = 0;
 const HISTORY_KEY = 'Backspace';
 
-const COMMAND_KEYS = {
-  "command-01": "KeyA",
-  "command-02": "KeyS",
-  "command-03": "KeyD",
-  "command-04": "KeyF",
+const COMMAND_COMBOS = {
+  "command-01": "ga",
+  "command-02": "pa",
+  "command-03": "gb",
+  "command-04": "pb",
 }
 
 const cache = new Cache();
@@ -239,16 +240,38 @@ const server = new Server({
 
 chrome.runtime.onMessage.addListener(server.serve.bind(server));
 
+const comboTrie = function() {
+  const buildAction = function(descriptor) {
+    return async function(parsedArgs) {
+      const state = await cache.getState();
+      const withDefaultKeysetId = function(keyRef) {
+        if (keyRef.keysetId == null) {
+          return {
+            keysetId: state.data.keysetId,
+            key: keyRef.key,
+          };
+        }
+        return keyRef;
+      };
+      const args = descriptor.argTransformer(parsedArgs, withDefaultKeysetId);
+      await server.execute({
+        command: descriptor.method,
+        args: args,
+      });
+    };
+  };
+  return combos.createDefaultTrie(buildAction);
+}();
+
 chrome.commands.onCommand.addListener(async (command) => {
   console.log(`Command triggered: ${command}`);
-  const key = COMMAND_KEYS[command];
-  if (!key) {
-    throw new UserException(`No key registered for ${command}.`);
+  const combo = COMMAND_COMBOS[command];
+  if (!combo) {
+    console.log(`No key sequence registered for ${command}.`);
+    return;
   }
-  const state = await cache.getState();
-  const result = await server.execute({
-    command: 'focusTab',
-    args: { key: key, keysetId: state.data.keysetId, options: {} },
-  });
-  console.log(`Result: ${result}`);
+  const result = comboTrie.match(combo);
+  if (result) {
+    await result.action(result.args);
+  }
 })
