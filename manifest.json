@@ -21,6 +21,7 @@
   "side_panel": {
     "default_path": "side-panel.html"
   },
+  "options_page": "options.html",
   "background": {
     "service_worker": "background.js",
     "type": "module"
@@ -33,31 +34,15 @@
   },
   "commands": {
     "command-01": {
-      "suggested_key": {
-        "default": "Ctrl+Shift+A",
-        "mac": "Alt+Shift+A"
-      },
       "description": "Command Slot 01"
     },
     "command-02": {
-      "suggested_key": {
-        "default": "Ctrl+Shift+S",
-        "mac": "Alt+Shift+S"
-      },
       "description": "Command Slot 02"
     },
     "command-03": {
-      "suggested_key": {
-        "default": "Ctrl+Shift+D",
-        "mac": "Alt+Shift+D"
-      },
       "description": "Command Slot 03"
     },
     "command-04": {
-      "suggested_key": {
-        "default": "Ctrl+Shift+F",
-        "mac": "Alt+Shift+F"
-      },
       "description": "Command Slot 04"
     },
     "command-05": {

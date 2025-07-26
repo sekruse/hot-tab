@@ -33,6 +33,10 @@ button:hover, button:focus {
   background-color: #d3d3d3;
 }
 
+/* Fonts */
+.font-monospace {
+  font-family: monospace;
+}
 /* Layout */
 .flex {
   display: flex;

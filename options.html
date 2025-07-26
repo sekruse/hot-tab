@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Hot Tab Options</title>
+  <link rel="stylesheet" href="./common.css">
+  <link rel="stylesheet" href="./options.css">
+</head>
+<body>
+  <section>
+    <h1>Shortcut Actions</h1>
+    <p class="margin-top">This options page lets you assign command combos to command slots. Before assigning command combos, you'll need to assign shortcuts to however many command slots you'd like to use in Chrome's shortcut menu. You can type in <code>chrome://extensions/shortcuts</code> in the address bar to get to that menu.</p>
+    <div class="shortcut-grid margin-top" id="shortcutGrid"></div>
+  </section>
+
+  <!-- Toast -->
+  <div id="toast" class="toast hidden">
+    <button id="toast-close">&#x2715;</button>
+    <span id="toast-content">Test</span>
+  </div>
+
+  <script src="options.js" type="module"></script>
+</body>
+</html>
