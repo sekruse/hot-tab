@@ -1,11 +1,12 @@
 import { Client } from './lpc.js';
 import toast from './toast.js';
 
-const background = new Client([]);
+const background = new Client(['listCommandCombos', 'setCommandCombo']);
 
 async function refereshShortcuts() {
   const shortcutGrid = document.getElementById('shortcutGrid');
   const commands = await chrome.commands.getAll();
+  const combos = await background.listCommandCombos();
   commands
     .filter(c => c.name.match(/^command-\d{2}$/))
     .sort((a, b) => a.description.localeCompare(b.description))
@@ -36,8 +37,13 @@ async function refereshShortcuts() {
       const comboInput = document.createElement('input');
       comboInput.classList.add('font-monospace');
       comboInput.type = 'text';
-      // TODO: Set stored option value.
-      // TODO: Store changed input.
+      comboInput.value = combos[c.name];
+      comboInput.addEventListener('input', toast.catch(async (event) => {
+        return background.setCommandCombo({
+          command: c.name,
+          combo: event.target.value,
+        });
+      }));
       shortcutGrid.appendChild(comboInput);
     });
 }

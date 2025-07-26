@@ -165,6 +165,14 @@ const server = new Server({
     state.setKeysetId(args.keysetId);
     await cache.flush();
   },
+  'listCommandCombos': async (args) => {
+    const options = await cache.getOptions();
+    return options.listCommandCombos();
+  },
+  'setCommandCombo': async (args) => {
+    const options = await cache.getOptions();
+    options.setCommandCombo(args.command, args.combo);
+  },
   'pinTab': async (args) => {
     const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
     if (!currentTab) {
