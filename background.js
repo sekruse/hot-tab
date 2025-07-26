@@ -5,13 +5,6 @@ import combos from './combos.js';
 const GLOBAL_KEYSET_ID = 0;
 const HISTORY_KEY = 'Backspace';
 
-const COMMAND_COMBOS = {
-  "command-01": "ga",
-  "command-02": "pa",
-  "command-03": "gb",
-  "command-04": "pb",
-}
-
 const cache = new Cache();
 
 async function findTab(pin, keyRef) {
@@ -265,7 +258,8 @@ const comboTrie = function() {
 
 chrome.commands.onCommand.addListener(async (command) => {
   console.log(`Command triggered: ${command}`);
-  const combo = COMMAND_COMBOS[command];
+  const options = await cache.getOptions();
+  const combo = options.getCommandCombo(command);
   if (!combo) {
     console.log(`No key sequence registered for ${command}.`);
     return;

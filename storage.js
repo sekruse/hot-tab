@@ -9,10 +9,46 @@ const defaultKeysets = Array(10).keys().reduce((acc, val) => {
   return acc;
 }, []);
 
+const defaultOptions = {
+  commandCombos: {
+    "command-01": "ga",
+    "command-02": "",
+    "command-03": "",
+    "command-04": "",
+    "command-05": "",
+    "command-06": "",
+    "command-07": "",
+    "command-08": "",
+    "command-09": "",
+    "command-10": "",
+    "command-11": "",
+    "command-12": "",
+    "command-13": "",
+    "command-14": "",
+    "command-15": "",
+    "command-16": "",
+    "command-17": "",
+    "command-18": "",
+    "command-19": "",
+    "command-20": "",
+    "command-21": "",
+    "command-22": "",
+    "command-23": "",
+    "command-24": "",
+    "command-25": "",
+    "command-26": "",
+    "command-27": "",
+    "command-28": "",
+    "command-29": "",
+    "command-30": "",
+  },
+};
+
 export class Cache {
   constructor() {
     this.state = null;
     this.keysets = null;
+    this.options = null;
   }
   async getState() {
     if (this.state === null) {
@@ -27,6 +63,13 @@ export class Cache {
       this.keysets = new Keysets(loaded.keysets);
     }
     return this.keysets;
+  }
+  async getOptions() {
+    if (this.options === null) {
+      const loaded = await chrome.storage.local.get('options');
+      this.options = new Options(loaded.options);
+    }
+    return this.options;
   }
   async flush() {
     let p = [];
@@ -146,5 +189,28 @@ class Keyset {
     const ref = this.findRef(key, /*mustExist=*/true);
     this.keysets.remove(ref);
     return ref.keysetId;
+  }
+}
+
+class Options {
+  constructor(data) {
+    this.data = {...defaultOptions, ...data};
+    this.dirty = false;
+  }
+  listCommandCombos() {
+    return this.data.commandCombos;
+  }
+  getCommandCombo(command) {
+    return this.data.commandCombos[command];
+  }
+  setCommandCombo(command, combo) {
+    this.data.commandCombos[command] = combo;
+    this.dirty = true;
+  }
+  async flush() {
+    if (this.dirty) {
+      await chrome.storage.local.set({'options': this.data});
+      this.dirty = false;
+    }
   }
 }
