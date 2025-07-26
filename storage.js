@@ -79,6 +79,9 @@ export class Cache {
     if (this.keysets) {
       p.push(this.keysets.flush());
     }
+    if (this.options) {
+      p.push(this.options.flush());
+    }
     await Promise.all(p);
   }
 }

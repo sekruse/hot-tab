@@ -276,4 +276,4 @@ chrome.commands.onCommand.addListener(async (command) => {
   if (result) {
     await result.action(result.args);
   }
-})
+});
