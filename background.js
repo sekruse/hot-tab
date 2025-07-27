@@ -1,5 +1,6 @@
 import { Server, UserException } from './lpc.js';
 import { Cache } from './storage.js';
+import combos from './combos.js';
 
 const GLOBAL_KEYSET_ID = 0;
 const HISTORY_KEY = 'Backspace';
@@ -85,7 +86,7 @@ async function focusTab(key, keysetId, options) {
 
   if (pinnedTab === null || options?.recreate) {
     const createOptions = {};
-    if (options?.summon) {
+    if (options?.summon && currentTab) {
       createOptions.windowId = currentTab.windowId;
       createOptions.index = currentTab.index + 1;
     } else {
@@ -93,13 +94,21 @@ async function focusTab(key, keysetId, options) {
       try {
         window = await chrome.windows.get(pin.windowId)
       } catch (error) {
-        window = await chrome.windows.getLastFocused();
+        try {
+          window = await chrome.windows.getLastFocused();
+        } catch (anotherError) {
+          // When triggered via shortcuts, there might be no window at all.
+          window = await chrome.windows.create({
+            type: 'normal',
+            focused: true,
+          });
+        }
       }
       createOptions.windowId = window.id;
     }
     pinnedTab = await chrome.tabs.create({
       url: pin.url,
-      windowId: currentTab.windowId,
+      windowId: currentTab?.windowId,
       ...createOptions,
     });
     pin.tabId = pinnedTab.id;
@@ -110,11 +119,8 @@ async function focusTab(key, keysetId, options) {
     await chrome.tabs.update(pinnedTab.id, { url: pin.url });
   }
 
-  if (currentTab.id === pinnedTab.id) {
-    return;
-  }
   // If the tab should be "summoned", that means we should move it to the current location.
-  if (options?.summon) {
+  if (options?.summon && currentTab) {
     if ((currentTab.windowId !== pinnedTab.windowId) || (Math.abs(currentTab.index - pinnedTab.index) > 1)) {
       pinnedTab = await chrome.tabs.move(pinnedTab.id, {
         index: currentTab.index + 1,
@@ -127,10 +133,12 @@ async function focusTab(key, keysetId, options) {
   }
   await chrome.windows.update(pinnedTab.windowId, { focused: true });
 
-  keysets.set({
-    key: HISTORY_KEY,
-    keysetId: GLOBAL_KEYSET_ID,
-  }, createPin(currentTab));
+  if (currentTab) {
+    keysets.set({
+      key: HISTORY_KEY,
+      keysetId: GLOBAL_KEYSET_ID,
+    }, createPin(currentTab));
+  }
 }
 
 async function closeTab(key, keysetId) {
@@ -157,8 +165,19 @@ const server = new Server({
     state.setKeysetId(args.keysetId);
     await cache.flush();
   },
+  'listCommandCombos': async (args) => {
+    const options = await cache.getOptions();
+    return options.listCommandCombos();
+  },
+  'setCommandCombo': async (args) => {
+    const options = await cache.getOptions();
+    options.setCommandCombo(args.command, args.combo);
+  },
   'pinTab': async (args) => {
     const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    if (!currentTab) {
+      throw new UserException(`There is no active tab to be pinned.`);
+    }
     const keysets = await cache.getKeysets();
     const keyset = keysets.getView([GLOBAL_KEYSET_ID, args.keysetId]);
     const pin = createPin(currentTab, args.options);
@@ -221,3 +240,40 @@ const server = new Server({
 });
 
 chrome.runtime.onMessage.addListener(server.serve.bind(server));
+
+const comboTrie = function() {
+  const buildAction = function(descriptor) {
+    return async function(parsedArgs) {
+      const state = await cache.getState();
+      const withDefaultKeysetId = function(keyRef) {
+        if (keyRef.keysetId == null) {
+          return {
+            keysetId: state.data.keysetId,
+            key: keyRef.key,
+          };
+        }
+        return keyRef;
+      };
+      const args = descriptor.argTransformer(parsedArgs, withDefaultKeysetId);
+      await server.execute({
+        command: descriptor.method,
+        args: args,
+      });
+    };
+  };
+  return combos.createDefaultTrie(buildAction);
+}();
+
+chrome.commands.onCommand.addListener(async (command) => {
+  console.log(`Command triggered: ${command}`);
+  const options = await cache.getOptions();
+  const combo = options.getCommandCombo(command);
+  if (!combo) {
+    console.log(`No key sequence registered for ${command}.`);
+    return;
+  }
+  const result = comboTrie.match(combo);
+  if (result) {
+    await result.action(result.args);
+  }
+});

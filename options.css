@@ -1,0 +1,16 @@
+.shortcut-grid {
+  display: grid;
+  grid-template-columns: 150px 150px 100px;
+  row-gap: 1ex;
+}
+
+.options-card {
+  margin-left: auto;
+  margin-right: auto;
+  padding: 15px 20px;
+  border-radius: 10px;
+  box-shadow: 1px 1px 4px 0px #797878;
+  background-color: #eeeeee;
+  max-width: 500px;
+  width: 90%;
+}

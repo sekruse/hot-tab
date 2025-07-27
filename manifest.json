@@ -21,6 +21,7 @@
   "side_panel": {
     "default_path": "side-panel.html"
   },
+  "options_page": "options.html",
   "background": {
     "service_worker": "background.js",
     "type": "module"
@@ -30,5 +31,110 @@
     "32": "images/icon-32.png",
     "48": "images/icon-48.png",
     "128": "images/icon-128.png"
+  },
+  "commands": {
+    "command-01": {
+      "description": "Command Slot 01",
+      "suggested_key": {
+        "default": "Alt+Shift+A"
+      }
+    },
+    "command-02": {
+      "description": "Command Slot 02",
+      "suggested_key": {
+        "default": "Alt+Shift+S"
+      }
+    },
+    "command-03": {
+      "description": "Command Slot 03",
+      "suggested_key": {
+        "default": "Alt+Shift+D"
+      }
+
+    },
+    "command-04": {
+      "description": "Command Slot 04",
+      "suggested_key": {
+        "default": "Alt+Shift+F"
+      }
+    },
+    "command-05": {
+      "description": "Command Slot 05"
+    },
+    "command-06": {
+      "description": "Command Slot 06"
+    },
+    "command-07": {
+      "description": "Command Slot 07"
+    },
+    "command-08": {
+      "description": "Command Slot 08"
+    },
+    "command-09": {
+      "description": "Command Slot 09"
+    },
+    "command-10": {
+      "description": "Command Slot 10"
+    },
+    "command-11": {
+      "description": "Command Slot 11"
+    },
+    "command-12": {
+      "description": "Command Slot 12"
+    },
+    "command-13": {
+      "description": "Command Slot 13"
+    },
+    "command-14": {
+      "description": "Command Slot 14"
+    },
+    "command-15": {
+      "description": "Command Slot 15"
+    },
+    "command-16": {
+      "description": "Command Slot 16"
+    },
+    "command-17": {
+      "description": "Command Slot 17"
+    },
+    "command-18": {
+      "description": "Command Slot 18"
+    },
+    "command-19": {
+      "description": "Command Slot 19"
+    },
+    "command-20": {
+      "description": "Command Slot 20"
+    },
+    "command-21": {
+      "description": "Command Slot 21"
+    },
+    "command-22": {
+      "description": "Command Slot 22"
+    },
+    "command-23": {
+      "description": "Command Slot 23"
+    },
+    "command-24": {
+      "description": "Command Slot 24"
+    },
+    "command-25": {
+      "description": "Command Slot 25"
+    },
+    "command-26": {
+      "description": "Command Slot 26"
+    },
+    "command-27": {
+      "description": "Command Slot 27"
+    },
+    "command-28": {
+      "description": "Command Slot 28"
+    },
+    "command-29": {
+      "description": "Command Slot 29"
+    },
+    "command-30": {
+      "description": "Command Slot 30"
+    }
   }
 }

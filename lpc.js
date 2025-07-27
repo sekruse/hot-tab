@@ -32,13 +32,17 @@ export class Server {
     this.messageHandlers = messageHandlers;
   }
 
-  serve(msg, sender, respond) {
-    console.log(`Incoming message: ${JSON.stringify(msg)}`);
+  async execute(msg) {
     const handler = this.messageHandlers[msg.command];
     if (!handler) {
       throw new UserException(`No handler for message: ${JSON.stringify(msg)}`);
     }
-    handler(msg.args).then((result) => {
+    return handler(msg.args);
+  }
+
+  serve(msg, sender, respond) {
+    console.log(`Incoming message: ${JSON.stringify(msg)}`);
+    this.execute(msg).then((result) => {
       const response = { success: true, result };
       console.log(`Response: ${JSON.stringify(response)}`);
       respond(response);
