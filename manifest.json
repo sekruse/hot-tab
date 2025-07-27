@@ -34,16 +34,29 @@
   },
   "commands": {
     "command-01": {
-      "description": "Command Slot 01"
+      "description": "Command Slot 01",
+      "suggested_key": {
+        "default": "Alt+Shift+A"
+      }
     },
     "command-02": {
-      "description": "Command Slot 02"
+      "description": "Command Slot 02",
+      "suggested_key": {
+        "default": "Alt+Shift+S"
+      }
     },
     "command-03": {
-      "description": "Command Slot 03"
+      "description": "Command Slot 03",
+      "suggested_key": {
+        "default": "Alt+Shift+D"
+      }
+
     },
     "command-04": {
-      "description": "Command Slot 04"
+      "description": "Command Slot 04",
+      "suggested_key": {
+        "default": "Alt+Shift+F"
+      }
     },
     "command-05": {
       "description": "Command Slot 05"

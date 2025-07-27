@@ -12,9 +12,9 @@ const defaultKeysets = Array(10).keys().reduce((acc, val) => {
 const defaultOptions = {
   commandCombos: {
     "command-01": "ga",
-    "command-02": "",
-    "command-03": "",
-    "command-04": "",
+    "command-02": "gs",
+    "command-03": "gd",
+    "command-04": "gf",
     "command-05": "",
     "command-06": "",
     "command-07": "",
