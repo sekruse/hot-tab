@@ -1,4 +1,4 @@
-import { keyCodeToHTML, isModifier, createIcon, parseDigitKeycode } from './keys.js';
+import { GLOBAL_KEYSET_ID, keyCodeToHTML, isModifier, createIcon, parseDigitKeycode } from './keys.js';
 import combos from './combos.js';
 import { Client } from './lpc.js';
 import toast from './toast.js';
@@ -6,7 +6,7 @@ import tooltip from './tooltip.js';
 
 const background = new Client([
   'getState', 'setActiveKeysetId',
-  'listPins', 'pinTab',
+  'listPins', 'getActiveKey', 'pinTab',
   'focusTab', 'closeTab',
   'clearKeyset', 'removePin',
   'updatePin']);
@@ -38,6 +38,17 @@ const comboTrie = function() {
     }
   };
   const trie = combos.createDefaultTrie(buildAction);
+  trie.addCombo('z', async () => {
+    const keyRef = await background.getActiveKey();
+    if (keyRef.keysetId !== GLOBAL_KEYSET_ID) {
+      keysetId = keyRef.keysetId;
+      // No need to wait: We have the cached value already updated.
+      background.setActiveKeysetId({ keysetId });
+    }
+    await refreshPinnedTabs();
+    const keyDiv = document.getElementById(`key${keyRef.key}`);
+    keyDiv.classList.add('key-glow-blue');
+  });
   trie.addCombo('q', () => window.close());
   trie.addCombo('e', async () => {
     const w = await chrome.windows.get(chrome.windows.WINDOW_ID_CURRENT);
@@ -58,6 +69,7 @@ async function refreshPinnedTabs() {
     } else {
       key.classList.toggle('key-highlighted', digit.value === keysetId);
     }
+    key.classList.remove('key-glow-blue');
   });
   Object.keys(pins).forEach((key) => {
     const pin = pins[key];

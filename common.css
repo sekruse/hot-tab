@@ -98,6 +98,11 @@ button:hover, button:focus {
   background-color: #fffcfc;
   border-color: #686767;
 }
+.key-glow-blue {
+  background: #a3cef4;
+  border-color: #a3cef4;
+  box-shadow: 0 0 5px 2px #008eff;
+}
 .key-disabled {
   background-color: #423c34;
   border-color: #2f2e2e;

@@ -1,10 +1,11 @@
 import { UserException } from './lpc.js';
+import { KEYSET_IDS } from './keys.js';
 
 const defaultState = {
   keysetId: 1,
 };
 
-const defaultKeysets = Array(10).keys().reduce((acc, val) => {
+const defaultKeysets = KEYSET_IDS.reduce((acc, val) => {
   acc[val] = {};
   return acc;
 }, []);

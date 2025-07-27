@@ -1,5 +1,9 @@
 import { UserException } from './lpc.js';
 
+export const GLOBAL_KEYSET_ID = 0;
+export const KEYSET_IDS = Array(10).keys().toArray();
+export const HISTORY_KEY = 'Backspace';
+
 export const keyCodeToHTML = (() => {
   const cs = new Map();
   cs.set('Minus', '-');

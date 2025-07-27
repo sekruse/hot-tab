@@ -1,9 +1,7 @@
 import { Server, UserException } from './lpc.js';
 import { Cache } from './storage.js';
 import combos from './combos.js';
-
-const GLOBAL_KEYSET_ID = 0;
-const HISTORY_KEY = 'Backspace';
+import { KEYSET_IDS, GLOBAL_KEYSET_ID, HISTORY_KEY } from './keys.js';
 
 const cache = new Cache();
 
@@ -236,6 +234,28 @@ const server = new Server({
     const pins = await listPins(keysetIds);
     await cache.flush();
     return pins;
+  },
+  'getActiveKey': async (args) => {
+    const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    if (!currentTab) {
+      throw new UserException('There is no active tab.');
+    }
+    for (let i = 0; i < KEYSET_IDS.length; i++) {
+      const keysetId = KEYSET_IDS[i];
+      const pins = await listPins([keysetId]);
+      const keys = Object.keys(pins);
+      for (let j = 0; j < keys.length; j++) {
+        const key = keys[j];
+        if (key === HISTORY_KEY) {
+          continue;
+        }
+        const pin = pins[key];
+        if (pin.tabId === currentTab.id) {
+          return { key, keysetId };
+        }
+      }
+    }
+    throw new UserException(`No pin found for current tab "${currentTab.title}" (${currentTab.url}).`);
   },
 });
 
