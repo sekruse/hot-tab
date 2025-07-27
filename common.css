@@ -63,6 +63,9 @@ button:hover, button:focus {
 .margin-top {
   margin-top: 5px;
 }
+.margin-top-double {
+  margin-top: 10px;
+}
 .bullets-none {
   list-style-type: none;
 }
