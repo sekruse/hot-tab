@@ -118,6 +118,13 @@ const defaultComboDescriptors = function() {
     },
   });
   combos.push({
+    sequence: 'k#',
+    descriptor: {
+      method: 'setActiveKeysetId',
+      argTransformer: ([partialKeyRef], withDefaultKeysetId) => partialKeyRef,
+    },
+  });
+  combos.push({
     sequence: 'x@',
     descriptor: {
       method: 'closeTab',
