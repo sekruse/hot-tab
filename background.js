@@ -153,6 +153,17 @@ async function closeTab(key, keysetId) {
   await chrome.tabs.remove(pinnedTab.id);
 }
 
+async function closeTabs(keysetId) {
+  const keysetIds = [keysetId];  // No global: require global tabs to be closed explicitly
+  const pins = await listPins(keysetIds);
+  await Promise.all(Object.values(pins).map(async (pin) => {
+    if (pin.tabId == null) {
+      return;
+    }
+    await chrome.tabs.remove(pin.tabId);
+  }));
+}
+
 const server = new Server({
   'getState': async (args) => {
     const state = await cache.getState();
@@ -229,6 +240,10 @@ const server = new Server({
     await closeTab(args.key, args.keysetId);
     await cache.flush();
   },
+  'closeTabs': async (args) => {
+    await closeTabs(args.keysetId);
+    await cache.flush();
+  },
   'listPins': async (args) => {
     const keysetIds = args.withoutGlobal ? [args.keysetId] : [GLOBAL_KEYSET_ID, args.keysetId]
     const pins = await listPins(keysetIds);
@@ -295,5 +310,6 @@ chrome.commands.onCommand.addListener(async (command) => {
   const result = comboTrie.match(combo);
   if (result) {
     await result.action(result.args);
+    await cache.flush();
   }
 });

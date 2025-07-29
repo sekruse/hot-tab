@@ -132,6 +132,20 @@ const defaultComboDescriptors = function() {
     },
   });
   combos.push({
+    sequence: 'X#',
+    descriptor: {
+      method: 'closeTabs',
+      argTransformer: ([partialKeyRef], withDefaultKeysetId) => withDefaultKeysetId(keyRef),
+    },
+  });
+  combos.push({
+    sequence: 'XX',
+    descriptor: {
+      method: 'closeTabs',
+      argTransformer: (noArgs, withDefaultKeysetId) => withDefaultKeysetId({}),
+    },
+  });
+  combos.push({
     sequence: 'm@@',
     descriptor: {
       method: 'updatePin',
