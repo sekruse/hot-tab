@@ -174,6 +174,19 @@ const defaultComboDescriptors = function() {
         return {
           ...withDefaultLayerId(srcKeyRef),
           updates: withDefaultLayerId(dstKeyRef),
+          swap: true,
+        };
+      },
+    },
+  });
+  combos.push({
+    sequence: 'M@@',
+    descriptor: {
+      method: 'updatePin',
+      argTransformer: function([srcKeyRef, dstKeyRef], withDefaultLayerId) {
+        return {
+          ...withDefaultLayerId(srcKeyRef),
+          updates: withDefaultLayerId(dstKeyRef),
         };
       },
     },

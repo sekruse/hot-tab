@@ -238,7 +238,12 @@ const server = new Server({
       }
     });
     if (srcRef.layerId !== dstRef.layerId || srcRef.key !== dstRef.key) {
-      layers.remove(srcRef);
+      const dstPin = layers.get(dstRef);
+      if (args.swap && dstPin) {
+        layers.set(srcRef, dstPin);
+      } else {
+        layers.remove(srcRef);
+      }
     }
     layers.set(dstRef, pin);
     await cache.flush();

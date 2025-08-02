@@ -80,7 +80,8 @@ The table below lists all supported command combos. Squared brackets (`[...]`) d
 | `y<layer>` | Close all tabs that are not pinned in the specified and global layer. | |
 | `yy` | Close all tabs that are not pinned in the current and global layer. | |
 | `ya` | Close all tabs that are not pinned in any layer. | |
-| `m[<layer>]<key>[<layer>]<key>` | Move the pin from the first to the second specified key. | In the UI, you should either leave out both `<layer>` args or add both to work around a known bug. |
+| `m[<layer>]<key>[<layer>]<key>` | Swap the pins from the first and the second specified key. | In the UI, you should either leave out both `<layer>` args or add both to work around a known bug. |
+| `M[<layer>]<key>[<layer>]<key>` | Move the pin from the first to the second specified key. | In the UI, you should either leave out both `<layer>` args or add both to work around a known bug. |
 | `d[<layer>]<key>` | Remove the pin. | This is the same as `Alt`+`<key>` (`⌥<key>` on macOS) in the popup window. |
 | `D<layer>` | Clear the specified layer. | |
 | `DD` | Clear the current layer. | |
