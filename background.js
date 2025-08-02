@@ -61,7 +61,6 @@ function createPin(tab, options) {
   }
   let pin = {
     tabId: tab.id,
-    windowId: tab.windowId,
     index: tab.index,
     title: tab.title,
     url: tab.url,
@@ -83,49 +82,48 @@ async function focusTab(key, layerId, options) {
   const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
 
   if (pinnedTab === null || options?.recreate) {
+    // We need to create a new tab.
     const createOptions = {};
-    if (options?.summon && currentTab) {
+    if (currentTab) {
       createOptions.windowId = currentTab.windowId;
       createOptions.index = currentTab.index + 1;
     } else {
       let window;
       try {
-        window = await chrome.windows.get(pin.windowId)
-      } catch (error) {
-        try {
-          window = await chrome.windows.getLastFocused();
-        } catch (anotherError) {
-          // When triggered via shortcuts, there might be no window at all.
-          window = await chrome.windows.create({
-            type: 'normal',
-            focused: true,
-          });
-        }
+        window = await chrome.windows.getLastFocused();
+      } catch (anotherError) {
+        // When triggered via shortcuts, there might be no window at all.
+        window = await chrome.windows.create({
+          type: 'normal',
+          focused: true,
+        });
       }
       createOptions.windowId = window.id;
     }
     pinnedTab = await chrome.tabs.create({
       url: pin.url,
-      windowId: currentTab?.windowId,
       ...createOptions,
     });
     pin.tabId = pinnedTab.id;
-    pin.windowId = pinnedTab.windowId;
     pin.index = pinnedTab.index;
     layer.set(key, pin);
-  } else if (options?.reset) {
-    await chrome.tabs.update(pinnedTab.id, { url: pin.url });
-  }
-
-  // If the tab should be "summoned", that means we should move it to the current location.
-  if (options?.summon && currentTab) {
-    if ((currentTab.windowId !== pinnedTab.windowId) || (Math.abs(currentTab.index - pinnedTab.index) > 1)) {
-      pinnedTab = await chrome.tabs.move(pinnedTab.id, {
-        index: currentTab.index + 1,
-        windowId: currentTab.windowId,
-      });
+  } else {
+    // We need to update an existing tab.
+    if (options?.reset) {
+      await chrome.tabs.update(pinnedTab.id, { url: pin.url });
+    }
+    // If the tab should be "summoned", that means we should move it to the current location.
+    if (options?.summon && currentTab) {
+      if ((currentTab.windowId !== pinnedTab.windowId) || (Math.abs(currentTab.index - pinnedTab.index) > 1)) {
+        pinnedTab = await chrome.tabs.move(pinnedTab.id, {
+          index: currentTab.index + 1,
+          windowId: currentTab.windowId,
+        });
+      }
     }
   }
+
+  // Make sure the tab is in the foreground.
   if (!pinnedTab.active) {
     pinnedTab = await chrome.tabs.update(pinnedTab.id, { active: true });
   }
