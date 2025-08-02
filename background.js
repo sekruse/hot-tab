@@ -130,10 +130,14 @@ async function focusTab(key, layerId, options) {
   await chrome.windows.update(pinnedTab.windowId, { focused: true });
 
   if (currentTab) {
-    layers.set({
-      key: HISTORY_KEY,
-      layerId: GLOBAL_LAYER_ID,
-    }, createPin(currentTab));
+    if (currentTab.url === 'chrome://newtab/') {
+      chrome.tabs.remove(currentTab.id);  // fire and forget
+    } else {
+      layers.set({
+        key: HISTORY_KEY,
+        layerId: GLOBAL_LAYER_ID,
+      }, createPin(currentTab));
+    }
   }
 }
 
