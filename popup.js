@@ -1,12 +1,13 @@
 import { GLOBAL_LAYER_ID, keyCodeToHTML, isModifier, createIcon, parseDigitKeycode } from './keys.js';
 import combos from './combos.js';
 import { Client } from './lpc.js';
+import modal from './modal.js';
 import toast from './toast.js';
 import tooltip from './tooltip.js';
 
 const background = new Client([
   'getState', 'setActiveLayerId',
-  'listPins', 'getActiveKey', 'pinTab',
+  'getPin', 'listPins', 'getActiveKey', 'pinTab',
   'focusTab', 'closeTab', 'closeTabs', 'closeUnpinnedTabs',
   'clearLayer', 'removePin',
   'updatePin']);
@@ -14,9 +15,35 @@ const background = new Client([
 // Currently active layer ID.
 let layerId;
 
-// Provides the active layer ID as a fallback value when the key ref doesn't specify one explicitly.
+
+async function refreshPinnedTabs() {
+  const pins = await background.listPins({ layerId: layerId });
+  document.querySelectorAll('#keyboard [data-keycode]').forEach((key) => {
+    const keyCode = key.getAttribute('data-keycode');
+    const digit = parseDigitKeycode(keyCode);
+    if (!digit.exists) {
+      key.innerHTML = '';
+      key.removeAttribute('data-tooltip');
+    } else {
+      key.classList.toggle('key-highlighted', digit.value === layerId);
+    }
+    key.classList.remove('key-glow-blue');
+  });
+  Object.keys(pins).forEach((key) => {
+    const pin = pins[key];
+    const keyDiv = document.getElementById(`key${key}`);
+    if (!keyDiv) {
+      throw new Error(`No keyDiv found for ${key} / ${JSON.stringify(pin)}`);
+    }
+    keyDiv.setAttribute('data-tooltip', pin.title);
+    keyDiv.replaceChildren(createIcon(pin));
+  });
+}
+
+// Input handling
 function withDefaultLayerId(keyRef) {
   if (keyRef.layerId == null) {
+    // Provide the active layer ID as a fallback value when the key ref doesn't specify one explicitly.
     return {
       layerId: layerId,
       key: keyRef.key,
@@ -49,38 +76,14 @@ const comboTrie = function() {
     const keyDiv = document.getElementById(`key${keyRef.key}`);
     keyDiv.classList.add('key-glow-blue');
   });
-  trie.addCombo('q', () => window.close());
-  trie.addCombo('e', async () => {
-    const w = await chrome.windows.get(chrome.windows.WINDOW_ID_CURRENT);
-    await chrome.sidePanel.open({ windowId: w.id });
-    window.close();
+  trie.addCombo('e@', async ([keyRef]) => {
+    keyRef = withDefaultLayerId(keyRef);
+    const { ref: actualRef, pin } = await background.getPin(keyRef);
+    showDialog(actualRef.key, actualRef.layerId, pin);
   });
+  trie.addCombo('q', () => window.close());
   return trie;
 }();
-
-async function refreshPinnedTabs() {
-  const pins = await background.listPins({ layerId: layerId });
-  document.querySelectorAll('#keyboard [data-keycode]').forEach((key) => {
-    const keyCode = key.getAttribute('data-keycode');
-    const digit = parseDigitKeycode(keyCode);
-    if (!digit.exists) {
-      key.innerHTML = '';
-      key.removeAttribute('data-tooltip');
-    } else {
-      key.classList.toggle('key-highlighted', digit.value === layerId);
-    }
-    key.classList.remove('key-glow-blue');
-  });
-  Object.keys(pins).forEach((key) => {
-    const pin = pins[key];
-    const keyDiv = document.getElementById(`key${key}`);
-    if (!keyDiv) {
-      throw new Error(`No keyDiv found for ${key} / ${JSON.stringify(pin)}`);
-    }
-    keyDiv.setAttribute('data-tooltip', pin.title);
-    keyDiv.replaceChildren(createIcon(pin));
-  });
-}
 
 async function handleDirectInput(keyCode) {
   if (!keyCodeToHTML.has(keyCode)) {
@@ -122,6 +125,9 @@ function addInputListeners() {
     }));
   });
   document.addEventListener('keydown', toast.catch(async (event) => {
+    if (modal.isVisible()) {
+      return;
+    }
     const commandBar = document.getElementById('command-bar');
     try {
       if (event.code === 'Space') {
@@ -156,6 +162,34 @@ function addInputListeners() {
   }));
 }
 
+// Modal handling
+async function showDialog(key, layerId, pin) {
+  document.getElementById('modal-title').innerText = `Edit Pin at ${key} in Layer ${layerId}`;
+  document.getElementById('inputKey').value = key;
+  document.getElementById('inputLayerId').value = layerId;
+  document.getElementById('inputTitle').value = pin.title;
+  document.getElementById('inputURL').value = pin.url;
+  document.getElementById('inputURLPattern').value = pin.urlPattern;
+  modal.show();
+}
+
+async function saveFromDialog() {
+  const key = document.getElementById('inputKey').value;
+  const layerId = document.getElementById('inputLayerId').value;
+  await background.updatePin({
+    key: key,
+    layerId: layerId,
+    updates: {
+      title: document.getElementById('inputTitle').value,
+      url: document.getElementById('inputURL').value,
+      urlPattern: document.getElementById('inputURLPattern').value,
+    },
+  });
+  modal.hide();
+  toast.show(`Pin for ${key} updated in layer ${layerId}.`, 3000);
+  refreshPinnedTabs();
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   toast.init();
   toast.catch(async () => {
@@ -164,6 +198,7 @@ document.addEventListener('DOMContentLoaded', () => {
     tooltip.init();
     addInputListeners();
     await refreshPinnedTabs();
+    modal.init(toast.catch(saveFromDialog));
   })();
 });
 

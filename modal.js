@@ -13,6 +13,10 @@ function hide() {
   modalPane.classList.add('animate-vanish');
 }
 
+function isVisible() {
+  return !modalPane.classList.contains('hidden') && !modalPane.classList.contains('animate-vanish');
+}
+
 function init(onSave, onDelete) {
   modalCancelButton.addEventListener('click', hide);
   modalSaveButton.classList.toggle('hidden', !onSave);
@@ -29,4 +33,5 @@ export default {
   init,
   show,
   hide,
+  isVisible,
 };

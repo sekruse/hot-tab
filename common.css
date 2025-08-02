@@ -185,7 +185,7 @@ button:hover, button:focus {
 
 .modal-dialog {
   background-color: #ffffff;
-  margin: 15% auto;
+  margin: 15px auto;
   width: 80%;
   border: 2px solid #414141;
   border-radius: 10px;

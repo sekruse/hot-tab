@@ -86,6 +86,36 @@
       or <span class="key key-inline">Alt</span> + key to remove the pin.
     </div>
 
+    <!-- Modal -->
+    <div id="modal" class="modal-overlay hidden">
+      <div class="modal-dialog flex flex-column">
+        <h1 id="modal-title">Update Tab Pin</h1>
+        <div class="margin-top">
+          <form>
+            <input id="inputLayerId" name="layerId" type="hidden">
+            <input id="inputKey" name="key" type="hidden">
+            <div class="margin-top">
+              <label for="title">Title:</label>
+              <input id="inputTitle" name="title" type="text" value="">
+            </div>
+            <div class="margin-top">
+              <label for="url">URL:</label>
+              <input id="inputURL" name="url" type="text" value="">
+            </div>
+            <div class="margin-top">
+              <label for="urlPattern">URL Pattern:</label>
+              <input id="inputURLPattern" name="urlPattern" type="text" value="">
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer margin-top">
+          <button id="modal-delete-button" class="button-delete">Delete</button>
+          <button id="modal-cancel-button" style="margin-left: 15px;">Cancel</button>
+          <button id="modal-save-button" class="button-save" style="margin-left: 5px;">Save</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Tooltip -->
     <div id="tooltip" class="hidden"></div>
 

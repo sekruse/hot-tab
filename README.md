@@ -86,7 +86,7 @@ The table below lists all supported command combos. Squared brackets (`[...]`) d
 | `D<layer>` | Clear the specified layer. | |
 | `DD` | Clear the current layer. | |
 | `k<layer>` | Change the currently selected layer. | |
-| `e` | Open the side panel for edits. | Only in the popup window, not for programmable shortcuts. |
+| `e[<layer>]<key>` | Open the edit dialog for the selected key. | Only in the popup window, not for programmable shortcuts. |
 | `q` | Close the popup. | Only in the popup window, not for programmable shortcuts. |
 
 ## Pins Throughout the Tab Lifecycle

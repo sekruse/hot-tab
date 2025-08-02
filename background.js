@@ -279,6 +279,13 @@ const server = new Server({
     await closeUnpinnedTabs(args.layerId);
     await cache.flush();
   },
+  'getPin': async (args) => {
+    const layers = await cache.getLayers();
+    const layer = layers.getView(args.withoutGlobal ? [args.layerId] : [GLOBAL_LAYER_ID, args.layerId]);
+    const ref = layer.findRef(args.key, /*mustExist=*/ true);
+    const pin = layers.get(ref);
+    return { ref, pin };
+  },
   'listPins': async (args) => {
     const layerIds = args.withoutGlobal ? [args.layerId] : [GLOBAL_LAYER_ID, args.layerId]
     const pins = await listPins(layerIds);
