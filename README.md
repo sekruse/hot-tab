@@ -75,8 +75,11 @@ The table below lists all supported command combos. Squared brackets (`[...]`) d
 | `f[<layer>]<key>` | Create a new tab with the pinned URL. | |
 | `r[<layer>]<key>` | Go to the pinned tab and reset it, i.e., navigate to the pinned URL. | |
 | `x[<layer>]<key>` | Close the pinned tab. | |
-| `X<layer>` | Close all pinned tabs from the keyset. | |
-| `XX` | Close all pinned tabs from the current keyset. | |
+| `X<layer>` | Close all pinned tabs from the layer. | |
+| `XX` | Close all pinned tabs from the current layer. | |
+| `y<layer>` | Close all tabs that are not pinned in the specified and global layer. | |
+| `yy` | Close all tabs that are not pinned in the current and global layer. | |
+| `ya` | Close all tabs that are not pinned in any layer. | |
 | `m[<layer>]<key>[<layer>]<key>` | Move the pin from the first to the second specified key. | In the UI, you should either leave out both `<layer>` args or add both to work around a known bug. |
 | `d[<layer>]<key>` | Remove the pin. | This is the same as `Alt`+`<key>` (`⌥<key>` on macOS) in the popup window. |
 | `D<layer>` | Clear the specified layer. | |

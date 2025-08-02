@@ -164,6 +164,30 @@ async function closeTabs(keysetId) {
   }));
 }
 
+async function closeUnpinnedTabs(keysetId) {
+  const selectedKeysetIds = (keysetId == null)
+    ? KEYSET_IDS.map(kid => [kid])
+    : [[GLOBAL_KEYSET_ID, keysetId]];
+  const allPins = await Promise.all(selectedKeysetIds.map(async (keysetIds) => {
+    const pins = await listPins(keysetIds);
+    delete pins[HISTORY_KEY];
+    return pins;
+  }));
+  const allPinnedTabIds = allPins.map((pins) => {
+    return Object.values(pins)
+      .filter((pin) => (pin.tabId != null))
+      .map((pin) => pin.tabId);
+  }).map((tabIds) => new Set(tabIds))
+    .reduce((agg, val) => agg.union(val), new Set());
+  const allTabs = await chrome.tabs.query({});
+  await Promise.all(allTabs.map(async (tab) => {
+    if (allPinnedTabIds.has(tab.id)) {
+      return;
+    }
+    await chrome.tabs.remove(tab.id);
+  }));
+}
+
 const server = new Server({
   'getState': async (args) => {
     const state = await cache.getState();
@@ -242,6 +266,10 @@ const server = new Server({
   },
   'closeTabs': async (args) => {
     await closeTabs(args.keysetId);
+    await cache.flush();
+  },
+  'closeUnpinnedTabs': async (args) => {
+    await closeUnpinnedTabs(args.keysetId);
     await cache.flush();
   },
   'listPins': async (args) => {

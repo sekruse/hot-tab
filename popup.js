@@ -7,7 +7,7 @@ import tooltip from './tooltip.js';
 const background = new Client([
   'getState', 'setActiveKeysetId',
   'listPins', 'getActiveKey', 'pinTab',
-  'focusTab', 'closeTab', 'closeTabs',
+  'focusTab', 'closeTab', 'closeTabs', 'closeUnpinnedTabs',
   'clearKeyset', 'removePin',
   'updatePin']);
 

@@ -135,7 +135,7 @@ const defaultComboDescriptors = function() {
     sequence: 'X#',
     descriptor: {
       method: 'closeTabs',
-      argTransformer: ([partialKeyRef], withDefaultKeysetId) => withDefaultKeysetId(keyRef),
+      argTransformer: ([partialKeyRef], withDefaultKeysetId) => withDefaultKeysetId(partialKeyRef),
     },
   });
   combos.push({
@@ -143,6 +143,27 @@ const defaultComboDescriptors = function() {
     descriptor: {
       method: 'closeTabs',
       argTransformer: (noArgs, withDefaultKeysetId) => withDefaultKeysetId({}),
+    },
+  });
+  combos.push({
+    sequence: 'y#',
+    descriptor: {
+      method: 'closeUnpinnedTabs',
+      argTransformer: ([partialKeyRef], withDefaultKeysetId) => withDefaultKeysetId(partialKeyRef),
+    },
+  });
+  combos.push({
+    sequence: 'yy',
+    descriptor: {
+      method: 'closeUnpinnedTabs',
+      argTransformer: (noArgs, withDefaultKeysetId) => withDefaultKeysetId({}),
+    },
+  });
+  combos.push({
+    sequence: 'ya',
+    descriptor: {
+      method: 'closeUnpinnedTabs',
+      argTransformer: (noArgs, withDefaultKeysetId) => noArgs,
     },
   });
   combos.push({
