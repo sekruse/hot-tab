@@ -1,11 +1,11 @@
 import { UserException } from './lpc.js';
-import { KEYSET_IDS } from './keys.js';
+import { LAYER_IDS } from './keys.js';
 
 const defaultState = {
-  keysetId: 1,
+  layerId: 1,
 };
 
-const defaultKeysets = KEYSET_IDS.reduce((acc, val) => {
+const defaultLayers = LAYER_IDS.reduce((acc, val) => {
   acc[val] = {};
   return acc;
 }, []);
@@ -48,7 +48,7 @@ const defaultOptions = {
 export class Cache {
   constructor() {
     this.state = null;
-    this.keysets = null;
+    this.layers = null;
     this.options = null;
   }
   async getState() {
@@ -58,12 +58,12 @@ export class Cache {
     }
     return this.state;
   }
-  async getKeysets() {
-    if (this.keysets === null) {
+  async getLayers() {
+    if (this.layers === null) {
       const loaded = await chrome.storage.local.get('keysets');
-      this.keysets = new Keysets(loaded.keysets);
+      this.layers = new Layers(loaded.keysets);
     }
-    return this.keysets;
+    return this.layers;
   }
   async getOptions() {
     if (this.options === null) {
@@ -77,8 +77,8 @@ export class Cache {
     if (this.state) {
       p.push(this.state.flush());
     }
-    if (this.keysets) {
-      p.push(this.keysets.flush());
+    if (this.layers) {
+      p.push(this.layers.flush());
     }
     if (this.options) {
       p.push(this.options.flush());
@@ -92,11 +92,11 @@ class State {
     this.data = {...defaultState, ...data};
     this.dirty = false;
   }
-  getKeysetId() {
-    return this.data.keysetId;
+  getLayerId() {
+    return this.data.layerId;
   }
-  setKeysetId(keysetId) {
-    this.data.keysetId = keysetId;
+  setLayerId(layerId) {
+    this.data.layerId = layerId;
     this.dirty = true;
   }
   async flush() {
@@ -107,27 +107,27 @@ class State {
   }
 }
 
-class Keysets {
+class Layers {
   constructor(data) {
-    this.data = {...defaultKeysets, ...data};
+    this.data = {...defaultLayers, ...data};
     this.dirty = false;
   }
   set(keyRef, val) {
-    this.data[keyRef.keysetId][keyRef.key] = val;
+    this.data[keyRef.layerId][keyRef.key] = val;
     this.dirty = true;
   }
   get(keyRef) {
-    return this.data[keyRef.keysetId][keyRef.key];
+    return this.data[keyRef.layerId][keyRef.key];
   }
   remove(keyRef) {
-    if (!(keyRef.key in this.data[keyRef.keysetId])) {
-      throw new UserException(`No pin for ${keyRef.key} at keyset ${keyRef.keysetId}.`);
+    if (!(keyRef.key in this.data[keyRef.layerId])) {
+      throw new UserException(`No pin for ${keyRef.key} at layer ${keyRef.layerId}.`);
     }
-    delete this.data[keyRef.keysetId][keyRef.key];
+    delete this.data[keyRef.layerId][keyRef.key];
     this.dirty = true;
   }
-  getView(keysetIds) {
-    return new Keyset(this, keysetIds);
+  getView(layerIds) {
+    return new Layer(this, layerIds);
   }
   async flush() {
     if (this.dirty) {
@@ -137,62 +137,62 @@ class Keysets {
   }
 }
 
-class Keyset {
-  constructor(keysets, keysetIds) {
-    this.keysets = keysets;
-    this.keysetIds = Array.isArray(keysetIds) ? keysetIds : [keysetIds];
+class Layer {
+  constructor(layers, layerIds) {
+    this.layers = layers;
+    this.layerIds = Array.isArray(layerIds) ? layerIds : [layerIds];
   }
   findRef(key, mustExist) {
     const ref = { key };
-    for (let i = 0; i < this.keysetIds.length; i++) {
-      ref.keysetId = this.keysetIds[i];
-      const val = this.keysets.get(ref);
+    for (let i = 0; i < this.layerIds.length; i++) {
+      ref.layerId = this.layerIds[i];
+      const val = this.layers.get(ref);
       if (val != null) {
         return ref;
       }
     }
     if (mustExist) {
-      throw new UserException(`There is no pin for ${key} in keyset(s) ${this.keysetIds.join(", ")}.`);
+      throw new UserException(`There is no pin for ${key} in layer(s) ${this.layerIds.join(", ")}.`);
     }
     return ref;
   }
-  // Associates the value with the key in the first keyset that already has a value.
-  // Otherwise, the key from the last keyset is associated with the value.
-  // Returns the ID of the keyset where the key was associated with the value.
+  // Associates the value with the key in the first layer that already has a value.
+  // Otherwise, the key from the last layer is associated with the value.
+  // Returns the ID of the layer where the key was associated with the value.
   set(key, val) {
     const ref = this.findRef(key);
-    this.keysets.set(ref, val);
-    return ref.keysetId;
+    this.layers.set(ref, val);
+    return ref.layerId;
   }
   get(key) {
     const ref = this.findRef(key);
-    return this.keysets.get(ref);
+    return this.layers.get(ref);
   }
   listEntries() {
     const entries = [];
-    let effectiveKeyset = {};
-    for (let i = 0; i < this.keysetIds.length; i++) {
-      const keysetId = this.keysetIds[i];
-      const keysetData = this.keysets.data[keysetId];
-      for (const key in keysetData) {
-        if (key in effectiveKeyset) {
+    let effectiveLayer = {};
+    for (let i = 0; i < this.layerIds.length; i++) {
+      const layerId = this.layerIds[i];
+      const layerData = this.layers.data[layerId];
+      for (const key in layerData) {
+        if (key in effectiveLayer) {
           continue;
         }
-        effectiveKeyset[key] = keysetData[key];
+        effectiveLayer[key] = layerData[key];
         entries.push({
-          keyRef: { keysetId, key },
-          value: keysetData[key],
+          keyRef: { layerId, key },
+          value: layerData[key],
         });
       }
     }
     return entries;
   }
-  // Clears the key at the first keyset that has that key set.
-  // Returns the ID of the keyset where the key has been cleared.
+  // Clears the key at the first layer that has that key set.
+  // Returns the ID of the layer where the key has been cleared.
   remove(key) {
     const ref = this.findRef(key, /*mustExist=*/true);
-    this.keysets.remove(ref);
-    return ref.keysetId;
+    this.layers.remove(ref);
+    return ref.layerId;
   }
 }
 

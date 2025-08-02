@@ -3,7 +3,7 @@ import { UserException } from './lpc.js';
 
 // Special character in key combinations to represent a key ref (<key> or <digit><key>).
 const COMBO_ARG_KEY_REF = '@';
-const COMBO_ARG_KEYSET = '#';
+const COMBO_ARG_LAYER = '#';
 
 // A ComboTrie stores key combinations in a trie and associates them with actions.
 class ComboTrie {
@@ -37,10 +37,10 @@ class ComboTrie {
       const char = input[i];
       if (COMBO_ARG_KEY_REF in node) {
         if (char.match(/\d/)) {
-          if (keyRefBuilder.keysetId != null) {
-            throw new UserException(`Multiple keyset IDs in ${input}.`);
+          if (keyRefBuilder.layerId != null) {
+            throw new UserException(`Multiple layer IDs in ${input}.`);
           }
-          keyRefBuilder.keysetId = Number.parseInt(char);
+          keyRefBuilder.layerId = Number.parseInt(char);
           continue;
         }
         if (char.match(/[a-zA-Z\[\]\\;',./]/)) {
@@ -53,11 +53,11 @@ class ComboTrie {
           node = node[COMBO_ARG_KEY_REF];
           continue;
         }
-      } else if (COMBO_ARG_KEYSET in node) {
+      } else if (COMBO_ARG_LAYER in node) {
         if (char.match(/\d/)) {
-          const keysetId = Number.parseInt(char);
-          args.push({ keysetId });
-          node = node[COMBO_ARG_KEYSET];
+          const layerId = Number.parseInt(char);
+          args.push({ layerId });
+          node = node[COMBO_ARG_LAYER];
           continue;
         }
       } if (char in node) {
@@ -83,7 +83,7 @@ const defaultComboDescriptors = function() {
     sequence: 'g@',
     descriptor: {
       method: 'focusTab',
-      argTransformer: ([keyRef], withDefaultKeysetId) => withDefaultKeysetId(keyRef),
+      argTransformer: ([keyRef], withDefaultLayerId) => withDefaultLayerId(keyRef),
       closePopup: true,
     },
   });
@@ -91,8 +91,8 @@ const defaultComboDescriptors = function() {
     sequence: 'G@',
     descriptor: {
       method: 'focusTab',
-      argTransformer: function([keyRef], withDefaultKeysetId) {
-        return { ...withDefaultKeysetId(keyRef), options: { summon: true }};
+      argTransformer: function([keyRef], withDefaultLayerId) {
+        return { ...withDefaultLayerId(keyRef), options: { summon: true }};
       },
       closePopup: true,
     },
@@ -101,8 +101,8 @@ const defaultComboDescriptors = function() {
     sequence: 'f@',
     descriptor: {
       method: 'focusTab',
-      argTransformer: function([keyRef], withDefaultKeysetId) {
-        return { ...withDefaultKeysetId(keyRef), options: { recreate: true }};
+      argTransformer: function([keyRef], withDefaultLayerId) {
+        return { ...withDefaultLayerId(keyRef), options: { recreate: true }};
       },
       closePopup: true,
     },
@@ -111,8 +111,8 @@ const defaultComboDescriptors = function() {
     sequence: 'r@',
     descriptor: {
       method: 'focusTab',
-      argTransformer: function([keyRef], withDefaultKeysetId) {
-        return { ...withDefaultKeysetId(keyRef), options: { reset: true }};
+      argTransformer: function([keyRef], withDefaultLayerId) {
+        return { ...withDefaultLayerId(keyRef), options: { reset: true }};
       },
       closePopup: true,
     },
@@ -120,60 +120,60 @@ const defaultComboDescriptors = function() {
   combos.push({
     sequence: 'k#',
     descriptor: {
-      method: 'setActiveKeysetId',
-      argTransformer: ([partialKeyRef], withDefaultKeysetId) => partialKeyRef,
+      method: 'setActiveLayerId',
+      argTransformer: ([partialKeyRef], withDefaultLayerId) => partialKeyRef,
     },
   });
   combos.push({
     sequence: 'x@',
     descriptor: {
       method: 'closeTab',
-      argTransformer: ([keyRef], withDefaultKeysetId) => withDefaultKeysetId(keyRef),
+      argTransformer: ([keyRef], withDefaultLayerId) => withDefaultLayerId(keyRef),
     },
   });
   combos.push({
     sequence: 'X#',
     descriptor: {
       method: 'closeTabs',
-      argTransformer: ([partialKeyRef], withDefaultKeysetId) => withDefaultKeysetId(partialKeyRef),
+      argTransformer: ([partialKeyRef], withDefaultLayerId) => withDefaultLayerId(partialKeyRef),
     },
   });
   combos.push({
     sequence: 'XX',
     descriptor: {
       method: 'closeTabs',
-      argTransformer: (noArgs, withDefaultKeysetId) => withDefaultKeysetId({}),
+      argTransformer: (noArgs, withDefaultLayerId) => withDefaultLayerId({}),
     },
   });
   combos.push({
     sequence: 'y#',
     descriptor: {
       method: 'closeUnpinnedTabs',
-      argTransformer: ([partialKeyRef], withDefaultKeysetId) => withDefaultKeysetId(partialKeyRef),
+      argTransformer: ([partialKeyRef], withDefaultLayerId) => withDefaultLayerId(partialKeyRef),
     },
   });
   combos.push({
     sequence: 'yy',
     descriptor: {
       method: 'closeUnpinnedTabs',
-      argTransformer: (noArgs, withDefaultKeysetId) => withDefaultKeysetId({}),
+      argTransformer: (noArgs, withDefaultLayerId) => withDefaultLayerId({}),
     },
   });
   combos.push({
     sequence: 'ya',
     descriptor: {
       method: 'closeUnpinnedTabs',
-      argTransformer: (noArgs, withDefaultKeysetId) => noArgs,
+      argTransformer: (noArgs, withDefaultLayerId) => noArgs,
     },
   });
   combos.push({
     sequence: 'm@@',
     descriptor: {
       method: 'updatePin',
-      argTransformer: function([srcKeyRef, dstKeyRef], withDefaultKeysetId) {
+      argTransformer: function([srcKeyRef, dstKeyRef], withDefaultLayerId) {
         return {
-          ...withDefaultKeysetId(srcKeyRef),
-          updates: withDefaultKeysetId(dstKeyRef),
+          ...withDefaultLayerId(srcKeyRef),
+          updates: withDefaultLayerId(dstKeyRef),
         };
       },
     },
@@ -182,29 +182,29 @@ const defaultComboDescriptors = function() {
     sequence: 'd@',
     descriptor: {
       method: 'removePin',
-      argTransformer: ([keyRef], withDefaultKeysetId) => withDefaultKeysetId(keyRef),
+      argTransformer: ([keyRef], withDefaultLayerId) => withDefaultLayerId(keyRef),
     },
   });
   combos.push({
     sequence: 'D#',
     descriptor: {
-      method: 'clearKeyset',
-      argTransformer: ([partialKeyRef], withDefaultKeysetId) => partialKeyRef,
+      method: 'clearLayer',
+      argTransformer: ([partialKeyRef], withDefaultLayerId) => partialKeyRef,
     },
   });
   combos.push({
     sequence: 'DD',
     descriptor: {
-      method: 'clearKeyset',
-      argTransformer: (noArgs, withDefaultKeysetId) => withDefaultKeysetId({}),
+      method: 'clearLayer',
+      argTransformer: (noArgs, withDefaultLayerId) => withDefaultLayerId({}),
     },
   });
   combos.push({
     sequence: 'p@',
     descriptor: {
       method: 'pinTab',
-      argTransformer: function([keyRef], withDefaultKeysetId) {
-        return { ...withDefaultKeysetId(keyRef), options: { pinScope: 'origin' }};
+      argTransformer: function([keyRef], withDefaultLayerId) {
+        return { ...withDefaultLayerId(keyRef), options: { pinScope: 'origin' }};
       },
       closePopup: true,
     },
@@ -213,8 +213,8 @@ const defaultComboDescriptors = function() {
     sequence: 'P@',
     descriptor: {
       method: 'pinTab',
-      argTransformer: function([keyRef], withDefaultKeysetId) {
-        return { ...withDefaultKeysetId(keyRef), options: { pinScope: 'page' }};
+      argTransformer: function([keyRef], withDefaultLayerId) {
+        return { ...withDefaultLayerId(keyRef), options: { pinScope: 'page' }};
       },
       closePopup: true,
     },

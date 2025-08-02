@@ -1,7 +1,7 @@
 import { UserException } from './lpc.js';
 
-export const GLOBAL_KEYSET_ID = 0;
-export const KEYSET_IDS = Array(10).keys().toArray();
+export const GLOBAL_LAYER_ID = 0;
+export const LAYER_IDS = Array(10).keys().toArray();
 export const HISTORY_KEY = 'Backspace';
 
 export const keyCodeToHTML = (() => {

@@ -1,24 +1,24 @@
-import { GLOBAL_KEYSET_ID, keyCodeToHTML, isModifier, createIcon, parseDigitKeycode } from './keys.js';
+import { GLOBAL_LAYER_ID, keyCodeToHTML, isModifier, createIcon, parseDigitKeycode } from './keys.js';
 import combos from './combos.js';
 import { Client } from './lpc.js';
 import toast from './toast.js';
 import tooltip from './tooltip.js';
 
 const background = new Client([
-  'getState', 'setActiveKeysetId',
+  'getState', 'setActiveLayerId',
   'listPins', 'getActiveKey', 'pinTab',
   'focusTab', 'closeTab', 'closeTabs', 'closeUnpinnedTabs',
-  'clearKeyset', 'removePin',
+  'clearLayer', 'removePin',
   'updatePin']);
 
-// Currently active keyset ID.
-let keysetId;
+// Currently active layer ID.
+let layerId;
 
-// Provides the active keyset ID as a fallback value when the key ref doesn't specify one explicitly.
-function withDefaultKeysetId(keyRef) {
-  if (keyRef.keysetId == null) {
+// Provides the active layer ID as a fallback value when the key ref doesn't specify one explicitly.
+function withDefaultLayerId(keyRef) {
+  if (keyRef.layerId == null) {
     return {
-      keysetId: keysetId,
+      layerId: layerId,
       key: keyRef.key,
     };
   }
@@ -28,7 +28,7 @@ function withDefaultKeysetId(keyRef) {
 const comboTrie = function() {
   const buildAction = function(descriptor) {
     return async function(parsedArgs) {
-      const args = descriptor.argTransformer(parsedArgs, withDefaultKeysetId);
+      const args = descriptor.argTransformer(parsedArgs, withDefaultLayerId);
       await background[descriptor.method](args);
       if (descriptor.closePopup) {
         window.close();
@@ -40,10 +40,10 @@ const comboTrie = function() {
   const trie = combos.createDefaultTrie(buildAction);
   trie.addCombo('z', async () => {
     const keyRef = await background.getActiveKey();
-    if (keyRef.keysetId !== GLOBAL_KEYSET_ID) {
-      keysetId = keyRef.keysetId;
+    if (keyRef.layerId !== GLOBAL_LAYER_ID) {
+      layerId = keyRef.layerId;
       // No need to wait: We have the cached value already updated.
-      background.setActiveKeysetId({ keysetId });
+      background.setActiveLayerId({ layerId });
     }
     await refreshPinnedTabs();
     const keyDiv = document.getElementById(`key${keyRef.key}`);
@@ -59,7 +59,7 @@ const comboTrie = function() {
 }();
 
 async function refreshPinnedTabs() {
-  const pins = await background.listPins({ keysetId: keysetId });
+  const pins = await background.listPins({ layerId: layerId });
   document.querySelectorAll('#keyboard [data-keycode]').forEach((key) => {
     const keyCode = key.getAttribute('data-keycode');
     const digit = parseDigitKeycode(keyCode);
@@ -67,7 +67,7 @@ async function refreshPinnedTabs() {
       key.innerHTML = '';
       key.removeAttribute('data-tooltip');
     } else {
-      key.classList.toggle('key-highlighted', digit.value === keysetId);
+      key.classList.toggle('key-highlighted', digit.value === layerId);
     }
     key.classList.remove('key-glow-blue');
   });
@@ -88,8 +88,8 @@ async function handleDirectInput(keyCode) {
   }
   const digit = parseDigitKeycode(keyCode);
   if (digit.exists) {
-    await background.setActiveKeysetId({ keysetId: digit.value });
-    keysetId = digit.value;
+    await background.setActiveLayerId({ layerId: digit.value });
+    layerId = digit.value;
     await refreshPinnedTabs();
     return;
   }
@@ -98,16 +98,16 @@ async function handleDirectInput(keyCode) {
     return;
   }
   if (event.ctrlKey) {
-    await background.pinTab({ key: keyCode, keysetId: keysetId, options: { pinScope: 'origin' }});
+    await background.pinTab({ key: keyCode, layerId: layerId, options: { pinScope: 'origin' }});
   } else if (event.shiftKey) {
-    await background.focusTab({ key: keyCode, keysetId: keysetId, options: { summon: true }});
+    await background.focusTab({ key: keyCode, layerId: layerId, options: { summon: true }});
   } else if (event.altKey) {
-    await background.removePin({ key: keyCode, keysetId: keysetId });
+    await background.removePin({ key: keyCode, layerId: layerId });
     toast.show(`Pin for ${keyCode} removed.`, 3000);
     await refreshPinnedTabs();
     return;
   } else {
-    await background.focusTab({ key: keyCode, keysetId: keysetId });
+    await background.focusTab({ key: keyCode, layerId: layerId });
   }
   window.close();
 }
@@ -132,7 +132,7 @@ function addInputListeners() {
         return;
       }
       inputSequence += event.key;
-      // Hand through input to the direct handler to switch the active keyset.
+      // Hand through input to the direct handler to switch the active layer.
       if (event.code.startsWith('Digit')) {
         handleDirectInput(event.code);
       }
@@ -156,7 +156,7 @@ document.addEventListener('DOMContentLoaded', () => {
   toast.init();
   toast.catch(async () => {
     const state = await background.getState();
-    keysetId = state.keysetId;
+    layerId = state.layerId;
     tooltip.init();
     addInputListeners();
     await refreshPinnedTabs();

@@ -1,7 +1,7 @@
 import { Server, UserException } from './lpc.js';
 import { Cache } from './storage.js';
 import combos from './combos.js';
-import { KEYSET_IDS, GLOBAL_KEYSET_ID, HISTORY_KEY } from './keys.js';
+import { LAYER_IDS, GLOBAL_LAYER_ID, HISTORY_KEY } from './keys.js';
 
 const cache = new Cache();
 
@@ -26,21 +26,21 @@ async function findTab(pin, keyRef) {
       url: pin.url,
       urlPattern: pin.urlPattern,
     };
-    const keysets = await cache.getKeysets();
-    keysets.set(keyRef, pin);
+    const layers = await cache.getLayers();
+    layers.set(keyRef, pin);
     return tab;
   }
   // If none, mark the pin as dangling.
   delete pin.tabId;
-  const keysets = await cache.getKeysets();
-  keysets.set(keyRef, pin);
+  const layers = await cache.getLayers();
+  layers.set(keyRef, pin);
   return null;
 }
 
-async function listPins(keysetIds) {
-  const keysets = await cache.getKeysets();
-  const keyset = keysets.getView(keysetIds);
-  const refreshedPins = await Promise.all(keyset.listEntries().map(async (entry) => {
+async function listPins(layerIds) {
+  const layers = await cache.getLayers();
+  const layer = layers.getView(layerIds);
+  const refreshedPins = await Promise.all(layer.listEntries().map(async (entry) => {
     await findTab(entry.value, entry.keyRef);
     return { keyRef: entry.keyRef, pin: entry.value }; 
   }));
@@ -72,14 +72,14 @@ function createPin(tab, options) {
 }
 
 // Bring a pinned tab to the focus, possibly shifting focus to its window.
-async function focusTab(key, keysetId, options) {
-  const keysets = await cache.getKeysets();
-  const keyset = keysets.getView([GLOBAL_KEYSET_ID, keysetId]);
-  const pin = keyset.get(key);
+async function focusTab(key, layerId, options) {
+  const layers = await cache.getLayers();
+  const layer = layers.getView([GLOBAL_LAYER_ID, layerId]);
+  const pin = layer.get(key);
   if (!pin) {
-    throw new UserException(`There is no pin at ${key} in keyset ${keysetId}.`);
+    throw new UserException(`There is no pin at ${key} in layer ${layerId}.`);
   }
-  let pinnedTab = await findTab(pin, { key, keysetId });
+  let pinnedTab = await findTab(pin, { key, layerId });
   const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
 
   if (pinnedTab === null || options?.recreate) {
@@ -112,7 +112,7 @@ async function focusTab(key, keysetId, options) {
     pin.tabId = pinnedTab.id;
     pin.windowId = pinnedTab.windowId;
     pin.index = pinnedTab.index;
-    keyset.set(key, pin);
+    layer.set(key, pin);
   } else if (options?.reset) {
     await chrome.tabs.update(pinnedTab.id, { url: pin.url });
   }
@@ -132,30 +132,30 @@ async function focusTab(key, keysetId, options) {
   await chrome.windows.update(pinnedTab.windowId, { focused: true });
 
   if (currentTab) {
-    keysets.set({
+    layers.set({
       key: HISTORY_KEY,
-      keysetId: GLOBAL_KEYSET_ID,
+      layerId: GLOBAL_LAYER_ID,
     }, createPin(currentTab));
   }
 }
 
-async function closeTab(key, keysetId) {
-  const keysets = await cache.getKeysets();
-  const keyset = keysets.getView([GLOBAL_KEYSET_ID, keysetId]);
-  const pin = keyset.get(key);
+async function closeTab(key, layerId) {
+  const layers = await cache.getLayers();
+  const layer = layers.getView([GLOBAL_LAYER_ID, layerId]);
+  const pin = layer.get(key);
   if (!pin) {
-    throw new UserException(`There is no pin at ${key} in keyset ${keysetId}.`);
+    throw new UserException(`There is no pin at ${key} in layer ${layerId}.`);
   }
-  const pinnedTab = await findTab(pin, { key, keysetId });
+  const pinnedTab = await findTab(pin, { key, layerId });
   if (!pinnedTab) {
     return;
   }
   await chrome.tabs.remove(pinnedTab.id);
 }
 
-async function closeTabs(keysetId) {
-  const keysetIds = [keysetId];  // No global: require global tabs to be closed explicitly
-  const pins = await listPins(keysetIds);
+async function closeTabs(layerId) {
+  const layerIds = [layerId];  // No global: require global tabs to be closed explicitly
+  const pins = await listPins(layerIds);
   await Promise.all(Object.values(pins).map(async (pin) => {
     if (pin.tabId == null) {
       return;
@@ -164,12 +164,12 @@ async function closeTabs(keysetId) {
   }));
 }
 
-async function closeUnpinnedTabs(keysetId) {
-  const selectedKeysetIds = (keysetId == null)
-    ? KEYSET_IDS.map(kid => [kid])
-    : [[GLOBAL_KEYSET_ID, keysetId]];
-  const allPins = await Promise.all(selectedKeysetIds.map(async (keysetIds) => {
-    const pins = await listPins(keysetIds);
+async function closeUnpinnedTabs(layerId) {
+  const selectedLayerIds = (layerId == null)
+    ? LAYER_IDS.map(kid => [kid])
+    : [[GLOBAL_LAYER_ID, layerId]];
+  const allPins = await Promise.all(selectedLayerIds.map(async (layerIds) => {
+    const pins = await listPins(layerIds);
     delete pins[HISTORY_KEY];
     return pins;
   }));
@@ -193,9 +193,9 @@ const server = new Server({
     const state = await cache.getState();
     return state.data;
   },
-  'setActiveKeysetId': async (args) => {
+  'setActiveLayerId': async (args) => {
     const state = await cache.getState();
-    state.setKeysetId(args.keysetId);
+    state.setLayerId(args.layerId);
     await cache.flush();
   },
   'listCommandCombos': async (args) => {
@@ -211,70 +211,70 @@ const server = new Server({
     if (!currentTab) {
       throw new UserException(`There is no active tab to be pinned.`);
     }
-    const keysets = await cache.getKeysets();
-    const keyset = keysets.getView([GLOBAL_KEYSET_ID, args.keysetId]);
+    const layers = await cache.getLayers();
+    const layer = layers.getView([GLOBAL_LAYER_ID, args.layerId]);
     const pin = createPin(currentTab, args.options);
-    const keysetId = keyset.set(args.key, pin);
+    const layerId = layer.set(args.key, pin);
     await cache.flush();
-    return { keysetId };
+    return { layerId };
   },
   'updatePin': async (args) => {
-    const keysets = await cache.getKeysets();
+    const layers = await cache.getLayers();
     const srcRef = {
-      keysetId: args.keysetId,
+      layerId: args.layerId,
       key: args.key,
     };
     const dstRef = { ...srcRef };
-    if (args.updates.keysetId != null) {
-      dstRef.keysetId = args.updates.keysetId;
+    if (args.updates.layerId != null) {
+      dstRef.layerId = args.updates.layerId;
     }
     if (args.updates.key != null) {
       dstRef.key = args.updates.key;
     }
-    const pin = keysets.get(srcRef);
+    const pin = layers.get(srcRef);
     ['title', 'url', 'urlPattern'].forEach(p => {
       if (p in args.updates) {
         pin[p] = args.updates[p];
       }
     });
-    if (srcRef.keysetId !== dstRef.keysetId || srcRef.key !== dstRef.key) {
-      keysets.remove(srcRef);
+    if (srcRef.layerId !== dstRef.layerId || srcRef.key !== dstRef.key) {
+      layers.remove(srcRef);
     }
-    keysets.set(dstRef, pin);
+    layers.set(dstRef, pin);
     await cache.flush();
   },
-  'clearKeyset': async (args) => {
-    const keysets = await cache.getKeysets();
-    const keyset = keysets.getView([args.keysetId]);
-    keyset.listEntries().forEach((e) => keyset.remove(e.keyRef.key));
+  'clearLayer': async (args) => {
+    const layers = await cache.getLayers();
+    const layer = layers.getView([args.layerId]);
+    layer.listEntries().forEach((e) => layer.remove(e.keyRef.key));
     await cache.flush();
   },
   'removePin': async (args) => {
-    const keysets = await cache.getKeysets();
-    const keyset = keysets.getView([GLOBAL_KEYSET_ID, args.keysetId]);
-    const keysetId = keyset.remove(args.key);
+    const layers = await cache.getLayers();
+    const layer = layers.getView([GLOBAL_LAYER_ID, args.layerId]);
+    const layerId = layer.remove(args.key);
     await cache.flush();
-    return { keysetId };
+    return { layerId };
   },
   'focusTab': async (args) => {
-    await focusTab(args.key, args.keysetId, args.options);
+    await focusTab(args.key, args.layerId, args.options);
     await cache.flush();
   },
   'closeTab': async (args) => {
-    await closeTab(args.key, args.keysetId);
+    await closeTab(args.key, args.layerId);
     await cache.flush();
   },
   'closeTabs': async (args) => {
-    await closeTabs(args.keysetId);
+    await closeTabs(args.layerId);
     await cache.flush();
   },
   'closeUnpinnedTabs': async (args) => {
-    await closeUnpinnedTabs(args.keysetId);
+    await closeUnpinnedTabs(args.layerId);
     await cache.flush();
   },
   'listPins': async (args) => {
-    const keysetIds = args.withoutGlobal ? [args.keysetId] : [GLOBAL_KEYSET_ID, args.keysetId]
-    const pins = await listPins(keysetIds);
+    const layerIds = args.withoutGlobal ? [args.layerId] : [GLOBAL_LAYER_ID, args.layerId]
+    const pins = await listPins(layerIds);
     await cache.flush();
     return pins;
   },
@@ -283,9 +283,9 @@ const server = new Server({
     if (!currentTab) {
       throw new UserException('There is no active tab.');
     }
-    for (let i = 0; i < KEYSET_IDS.length; i++) {
-      const keysetId = KEYSET_IDS[i];
-      const pins = await listPins([keysetId]);
+    for (let i = 0; i < LAYER_IDS.length; i++) {
+      const layerId = LAYER_IDS[i];
+      const pins = await listPins([layerId]);
       const keys = Object.keys(pins);
       for (let j = 0; j < keys.length; j++) {
         const key = keys[j];
@@ -294,7 +294,7 @@ const server = new Server({
         }
         const pin = pins[key];
         if (pin.tabId === currentTab.id) {
-          return { key, keysetId };
+          return { key, layerId };
         }
       }
     }
@@ -308,16 +308,16 @@ const comboTrie = function() {
   const buildAction = function(descriptor) {
     return async function(parsedArgs) {
       const state = await cache.getState();
-      const withDefaultKeysetId = function(keyRef) {
-        if (keyRef.keysetId == null) {
+      const withDefaultLayerId = function(keyRef) {
+        if (keyRef.layerId == null) {
           return {
-            keysetId: state.data.keysetId,
+            layerId: state.data.layerId,
             key: keyRef.key,
           };
         }
         return keyRef;
       };
-      const args = descriptor.argTransformer(parsedArgs, withDefaultKeysetId);
+      const args = descriptor.argTransformer(parsedArgs, withDefaultLayerId);
       await server.execute({
         command: descriptor.method,
         args: args,
