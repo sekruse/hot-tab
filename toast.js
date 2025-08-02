@@ -33,7 +33,7 @@ function catchAndDisplay(func) {
       return await func(a, b, c, d, e);
     } catch (err) {
       if (err.name === 'UserException') {
-        showToast(`Error: ${err.message}`, null, 'toast-error');
+        showToast(`Error: ${err.message}`, 3000, 'toast-error');
       } else {
         showToast('Oops, something went wrong... :/', 5000 /*ms*/, 'toast-error');
         throw err;
