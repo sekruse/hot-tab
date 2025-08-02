@@ -81,6 +81,7 @@ const comboTrie = function() {
     const { ref: actualRef, pin } = await background.getPin(keyRef);
     showDialog(actualRef.key, actualRef.layerId, pin);
   });
+  trie.addCombo(',', () => chrome.runtime.openOptionsPage());
   trie.addCombo('q', () => window.close());
   return trie;
 }();
