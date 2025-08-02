@@ -122,33 +122,37 @@ function addInputListeners() {
     }));
   });
   document.addEventListener('keydown', toast.catch(async (event) => {
-    if (event.code === 'Space') {
-      // Make the input sequence non-null to start a new input sequence.
-      inputSequence = '';
-      return;
-    }
-    if (inputSequence != null) {
-      if (isModifier(event.code)) {
-        return;
-      }
-      inputSequence += event.key;
-      // Hand through input to the direct handler to switch the active layer.
-      if (event.code.startsWith('Digit')) {
-        handleDirectInput(event.code);
-      }
-      try {
-        const result = comboTrie.match(inputSequence);
-        if (result) {
-          await result.action(result.args);
-          inputSequence = null;
+    const commandBar = document.getElementById('command-bar');
+    try {
+      if (event.code === 'Space') {
+        // Make the input sequence non-null to start a new input sequence.
+        inputSequence = '';
+      } else if (inputSequence != null) {
+        if (isModifier(event.code)) {
+          return;
         }
-      } catch (err) {
-        inputSequence = null;
-        throw err;
+        inputSequence += event.key;
+        // Hand through input to the direct handler to switch the active layer.
+        if (event.code.startsWith('Digit')) {
+          handleDirectInput(event.code);
+        }
+        try {
+          const result = comboTrie.match(inputSequence);
+          if (result) {
+            await result.action(result.args);
+            inputSequence = null;
+          }
+        } catch (err) {
+          inputSequence = null;
+          throw err;
+        }
+      } else {
+        await handleDirectInput(event.code);
       }
-      return;
+    } finally {
+      commandBar.classList.toggle('hidden', inputSequence == null);
+      commandBar.innerText = `> ${inputSequence}`;
     }
-    await handleDirectInput(event.code);
   }));
 }
 
