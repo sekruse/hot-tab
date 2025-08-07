@@ -207,6 +207,7 @@ const server = new Server({
   'setCommandCombo': async (args) => {
     const options = await cache.getOptions();
     options.setCommandCombo(args.command, args.combo);
+    await cache.flush();
   },
   'pinTab': async (args) => {
     const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
