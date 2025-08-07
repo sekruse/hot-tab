@@ -16,7 +16,7 @@ async function findTab(pin, keyRef) {
   }
   // Otherwise, try to find a tab that matches the URL pattern.
   const tabs = await chrome.tabs.query({ url: pin.urlPattern });
-  console.log(`Found ${tabs.length} tabs matching ${pin.urlPattern }`);
+  console.log(`Found ${tabs.length} tabs matching ${pin.urlPattern}`);
   if (tabs.length > 0) {
     const tab = tabs[0];
     pin = {
@@ -42,7 +42,7 @@ async function listPins(layerIds) {
   const layer = layers.getView(layerIds);
   const refreshedPins = await Promise.all(layer.listEntries().map(async (entry) => {
     await findTab(entry.value, entry.keyRef);
-    return { keyRef: entry.keyRef, pin: entry.value }; 
+    return { keyRef: entry.keyRef, pin: entry.value };
   }));
   return refreshedPins.reduce((acc, val) => {
     acc[val.keyRef.key] = val.pin;

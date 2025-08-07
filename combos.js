@@ -1,4 +1,4 @@
-import { htmlToKeyCode } from './keys.js';
+import { keysByInputChar } from './keys.js';
 import { UserException } from './lpc.js';
 
 // Special character in key combinations to represent a key ref (<key> or <digit><key>).
@@ -43,11 +43,11 @@ class ComboTrie {
           keyRefBuilder.layerId = Number.parseInt(char);
           continue;
         }
-        if (char.match(/[a-zA-Z\[\]\\;',./]/)) {
+        if (char.match(/[a-zA-Z\[\]\\;',./\<]/)) {
           if (keyRefBuilder.key != null) {
             throw new UserException(`Multiple keys in ${input}.`);
           }
-          keyRefBuilder.key = htmlToKeyCode.get(char.toUpperCase());
+          keyRefBuilder.key = keysByInputChar.get(char.toUpperCase()).keyCode;
           args.push(keyRefBuilder);
           keyRefBuilder = {};
           node = node[COMBO_ARG_KEY_REF];

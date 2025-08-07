@@ -1,4 +1,4 @@
-import { GLOBAL_LAYER_ID, keyCodeToHTML, isModifier, createIcon, parseDigitKeycode } from './keys.js';
+import { GLOBAL_LAYER_ID, keysByKeyCode, isModifier, createIcon, parseDigitKeycode } from './keys.js';
 import combos from './combos.js';
 import { Client } from './lpc.js';
 import modal from './modal.js';
@@ -87,7 +87,7 @@ const comboTrie = function() {
 }();
 
 async function handleDirectInput(keyCode) {
-  if (!keyCodeToHTML.has(keyCode)) {
+  if (!keysByKeyCode.has(keyCode)) {
     return;
   }
   const digit = parseDigitKeycode(keyCode);
