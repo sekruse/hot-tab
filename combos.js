@@ -92,7 +92,7 @@ const defaultComboDescriptors = function() {
     descriptor: {
       method: 'focusTab',
       argTransformer: function([keyRef], withDefaultLayerId) {
-        return { ...withDefaultLayerId(keyRef), options: { summon: true }};
+        return { ...withDefaultLayerId(keyRef), options: { summon: true } };
       },
       closePopup: true,
     },
@@ -102,7 +102,7 @@ const defaultComboDescriptors = function() {
     descriptor: {
       method: 'focusTab',
       argTransformer: function([keyRef], withDefaultLayerId) {
-        return { ...withDefaultLayerId(keyRef), options: { recreate: true }};
+        return { ...withDefaultLayerId(keyRef), options: { recreate: true } };
       },
       closePopup: true,
     },
@@ -112,7 +112,7 @@ const defaultComboDescriptors = function() {
     descriptor: {
       method: 'focusTab',
       argTransformer: function([keyRef], withDefaultLayerId) {
-        return { ...withDefaultLayerId(keyRef), options: { reset: true }};
+        return { ...withDefaultLayerId(keyRef), options: { reset: true } };
       },
       closePopup: true,
     },
@@ -217,7 +217,7 @@ const defaultComboDescriptors = function() {
     descriptor: {
       method: 'pinTab',
       argTransformer: function([keyRef], withDefaultLayerId) {
-        return { ...withDefaultLayerId(keyRef), options: { pinScope: 'origin' }};
+        return { ...withDefaultLayerId(keyRef), options: { pinScope: 'origin' } };
       },
       closePopup: true,
     },
@@ -227,11 +227,19 @@ const defaultComboDescriptors = function() {
     descriptor: {
       method: 'pinTab',
       argTransformer: function([keyRef], withDefaultLayerId) {
-        return { ...withDefaultLayerId(keyRef), options: { pinScope: 'page' }};
+        return { ...withDefaultLayerId(keyRef), options: { pinScope: 'page' } };
       },
       closePopup: true,
     },
   });
+  combos.push({
+    sequence: 'cp',
+    descriptor: {
+      method: 'toggleTabPinned',
+      argTransformer: function() { return {}; },
+      closePopup: true,
+    },
+  })
   return combos;
 }();
 

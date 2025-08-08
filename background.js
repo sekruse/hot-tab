@@ -276,6 +276,13 @@ const server = new Server({
     await closeTabs(args.layerId);
     await cache.flush();
   },
+  'toggleTabPinned': async (args) => {
+    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    if (!tab) {
+      throw new UserException('There is no active tab to pin.');
+    }
+    await chrome.tabs.update(tab.id, { pinned: !tab.pinned });
+  },
   'closeUnpinnedTabs': async (args) => {
     await closeUnpinnedTabs(args.layerId);
     await cache.flush();

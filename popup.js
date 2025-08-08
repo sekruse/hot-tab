@@ -10,7 +10,9 @@ const background = new Client([
   'getPin', 'listPins', 'getActiveKey', 'pinTab',
   'focusTab', 'closeTab', 'closeTabs', 'closeUnpinnedTabs',
   'clearLayer', 'removePin',
-  'updatePin']);
+  'updatePin',
+  'toggleTabPinned',
+]);
 
 // Currently active layer ID.
 let layerId;
@@ -102,9 +104,9 @@ async function handleDirectInput(keyCode) {
     return;
   }
   if (event.ctrlKey) {
-    await background.pinTab({ key: keyCode, layerId: layerId, options: { pinScope: 'origin' }});
+    await background.pinTab({ key: keyCode, layerId: layerId, options: { pinScope: 'origin' } });
   } else if (event.shiftKey) {
-    await background.focusTab({ key: keyCode, layerId: layerId, options: { summon: true }});
+    await background.focusTab({ key: keyCode, layerId: layerId, options: { summon: true } });
   } else if (event.altKey) {
     await background.removePin({ key: keyCode, layerId: layerId });
     toast.show(`Pin for ${keyCode} removed.`, 3000);
