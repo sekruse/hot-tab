@@ -197,7 +197,27 @@ const server = new Server({
   },
   'setActiveLayerId': async (args) => {
     const state = await cache.getState();
+    if (args.layerId) {
     state.setLayerId(args.layerId);
+    } else {
+      const layers = await cache.getLayers();
+      let success = false;
+      for (let i = 1; i < LAYER_IDS.length; i++) {
+        const layerId = LAYER_IDS[i];
+        if (layerId == GLOBAL_LAYER_ID) {
+          continue;
+        }
+        const layer = layers.getView([layerId]);
+        if (layer.listEntries().length == 0) {
+          state.setLayerId(layerId);
+          success = true;
+          break;
+        }
+      }
+      if (!success) {
+        throw new UserException('No free layer found.');
+      }
+    }
     await cache.flush();
   },
   'listCommandCombos': async (args) => {

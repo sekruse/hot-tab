@@ -86,6 +86,7 @@ The table below lists all supported command combos. Squared brackets (`[...]`) d
 | `D<layer>` | Clear the specified layer. | |
 | `DD` | Clear the current layer. | |
 | `k<layer>` | Change the currently selected layer. | |
+| `kk` | Change the currently selected layer to the next free layer. | |
 | `cp` | Pin (in the Chrome sense) the currently active tab. |
 | `e[<layer>]<key>` | Open the edit dialog for the selected key. | Only in the popup window, not for programmable shortcuts. |
 | `,` | Open the options page. | Only in the popup window, not for programmable shortcuts. |

@@ -17,9 +17,10 @@ const background = new Client([
 // Currently active layer ID.
 let layerId;
 
-
 async function refreshPinnedTabs() {
-  const pins = await background.listPins({ layerId: layerId });
+  const state = await background.getState();
+  layerId = state.layerId;
+  const pins = await background.listPins({ layerId });
   document.querySelectorAll('#keyboard [data-keycode]').forEach((key) => {
     const keyCode = key.getAttribute('data-keycode');
     const digit = parseDigitKeycode(keyCode);

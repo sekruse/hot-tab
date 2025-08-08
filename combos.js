@@ -125,6 +125,13 @@ const defaultComboDescriptors = function() {
     },
   });
   combos.push({
+    sequence: 'kk',
+    descriptor: {
+      method: 'setActiveLayerId',
+      argTransformer: function() { return {}; },
+    },
+  });
+  combos.push({
     sequence: 'x@',
     descriptor: {
       method: 'closeTab',
