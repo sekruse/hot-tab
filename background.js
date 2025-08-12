@@ -1,8 +1,7 @@
 import { Server, UserException } from './lpc.js';
 import { Cache } from './storage.js';
 import combos from './combos.js';
-import { LAYER_IDS, GLOBAL_LAYER_ID, HISTORY_KEY } from './keys.js';
-
+import { LAYER_IDS, GLOBAL_LAYER_ID, HISTORY_KEY, keyOrder } from './keys.js';
 const cache = new Cache();
 
 async function findTab(pin, keyRef) {
@@ -236,8 +235,21 @@ const server = new Server({
     }
     const layers = await cache.getLayers();
     const layer = layers.getView([GLOBAL_LAYER_ID, args.layerId]);
+    let key = args.key;
+    if (!key) {
+      for (let i = 0; i < keyOrder.length; i++) {
+        const nextKey = keyOrder[i];
+        if (!layer.get(nextKey.keyCode)) {
+          key = nextKey.keyCode;
+          break;
+        }
+      }
+    }
+    if (!key) {
+      throw new UserException('There is no more free key slot among the default keys.');
+    }
     const pin = createPin(currentTab, args.options);
-    const layerId = layer.set(args.key, pin);
+    const layerId = layer.set(key, pin);
     await cache.flush();
     return { layerId };
   },

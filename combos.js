@@ -240,6 +240,22 @@ const defaultComboDescriptors = function() {
     },
   });
   combos.push({
+    sequence: ';#',
+    descriptor: {
+      method: 'pinTab',
+      argTransformer: ([partialKeyRef]) => { return { ...partialKeyRef, options: { pinScope: 'page' } }; },
+      closePopup: true,
+    },
+  });
+  combos.push({
+    sequence: ';;',
+    descriptor: {
+      method: 'pinTab',
+      argTransformer: (_, withDefaultLayerId) => withDefaultLayerId({ options: { pinScope: 'page' } }),
+      closePopup: true,
+    },
+  });
+  combos.push({
     sequence: 'cp',
     descriptor: {
       method: 'toggleTabPinned',
