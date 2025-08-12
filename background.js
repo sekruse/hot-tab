@@ -49,6 +49,23 @@ async function listPins(layerIds) {
   }, {});
 }
 
+async function findPin(tabId, layerIds) {
+  for (let i = 0; i < layerIds.length; i++) {
+    const layerId = layerIds[i];
+    const pins = await listPins([layerId]);
+    const keys = Object.keys(pins);
+    for (let j = 0; j < keys.length; j++) {
+      const key = keys[j];
+      if (key === HISTORY_KEY) {
+        continue;
+      }
+      const pin = pins[key];
+      if (pin.tabId === tabId) {
+        return { key, layerId };
+      }
+    }
+  }
+}
 
 function createPin(tab, options) {
   const url = new URL(tab.url);
@@ -197,7 +214,7 @@ const server = new Server({
   'setActiveLayerId': async (args) => {
     const state = await cache.getState();
     if (args.layerId) {
-    state.setLayerId(args.layerId);
+      state.setLayerId(args.layerId);
     } else {
       const layers = await cache.getLayers();
       let success = false;
@@ -337,22 +354,11 @@ const server = new Server({
     if (!currentTab) {
       throw new UserException('There is no active tab.');
     }
-    for (let i = 0; i < LAYER_IDS.length; i++) {
-      const layerId = LAYER_IDS[i];
-      const pins = await listPins([layerId]);
-      const keys = Object.keys(pins);
-      for (let j = 0; j < keys.length; j++) {
-        const key = keys[j];
-        if (key === HISTORY_KEY) {
-          continue;
-        }
-        const pin = pins[key];
-        if (pin.tabId === currentTab.id) {
-          return { key, layerId };
-        }
-      }
+    const keyRef = findPin(currentTab.id, LAYER_IDS);
+    if (!keyRef) {
+      throw new UserException(`No pin found for current tab "${currentTab.title}" (${currentTab.url}).`);
     }
-    throw new UserException(`No pin found for current tab "${currentTab.title}" (${currentTab.url}).`);
+    return keyRef;
   },
 });
 
