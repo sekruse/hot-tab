@@ -4,6 +4,12 @@ import combos from './combos.js';
 import { LAYER_IDS, GLOBAL_LAYER_ID, HISTORY_KEY, keyOrder } from './keys.js';
 const cache = new Cache();
 
+/**
+ * Finds the tab linked to the given pin. It might reassociate the pin with a new tab or set the pin as dangling.
+ * @param {Object} pin - The pin to work with.
+ * @param {Object} keyRef - A reference to the slot the pin is stored at -- so that it can be updated.
+ * @returns {?Object} The tab if any could be found.
+ */
 async function findTab(pin, keyRef) {
   // First, try to retrieve the pinned tab.
   if (pin.tabId !== undefined) {
@@ -36,37 +42,48 @@ async function findTab(pin, keyRef) {
   return null;
 }
 
+/**
+ * Lists the pins found on the given layers.
+ * @param {number[]} layerIds - The IDs of the layers to inspect. Leading layers overlay the following layers.
+ * @returns {!Object} An object whose keys are the key codes of the pins and the values are the pins.
+ */
 async function listPins(layerIds) {
   const layers = await cache.getLayers();
   const layer = layers.getView(layerIds);
-  const refreshedPins = await Promise.all(layer.listEntries().map(async (entry) => {
+  return Promise.all(layer.listEntries().map(async (entry) => {
     await findTab(entry.value, entry.keyRef);
     return { keyRef: entry.keyRef, pin: entry.value };
   }));
-  return refreshedPins.reduce((acc, val) => {
-    acc[val.keyRef.key] = val.pin;
-    return acc;
-  }, {});
 }
 
+/**
+ * Finds a pin for the given tab in the given layers.
+ * @param {number} tabId - ID of the Chrome tab to look for
+ * @param {number[]} layerIds - The IDs of the layers to inspect.
+ * @returns {?Object} An object with the keyRef and pin if a pin could be found.
+ */
 async function findPin(tabId, layerIds) {
   for (let i = 0; i < layerIds.length; i++) {
     const layerId = layerIds[i];
-    const pins = await listPins([layerId]);
-    const keys = Object.keys(pins);
-    for (let j = 0; j < keys.length; j++) {
-      const key = keys[j];
-      if (key === HISTORY_KEY) {
+    const entries = await listPins([layerId]);
+    for (let j = 0; j < entries.length; j++) {
+      const entry = entries[j];
+      if (entry.keyRef.key === HISTORY_KEY) {
         continue;
       }
-      const pin = pins[key];
-      if (pin.tabId === tabId) {
-        return { key, layerId };
+      if (entry.pin.tabId === tabId) {
+        return entry;
       }
     }
   }
 }
 
+/**
+ * Creates a pin object.
+ * @param {Object} The tab to pin.
+ * @param {string} options.pinScope - "origin" or "page", depending on which URL pattern the pin should bind to
+ * @returns {Object} The pin.
+ */
 function createPin(tab, options) {
   const url = new URL(tab.url);
   let urlPattern;
@@ -86,7 +103,15 @@ function createPin(tab, options) {
   return pin;
 }
 
-// Bring a pinned tab to the focus, possibly shifting focus to its window.
+/**
+ * Bring a pinned tab to the focus, possibly shifting focus to its window.
+ * If the tab does not exist, it is being created.
+ * @param {string} key - The key code under which the pin is stored.
+ * @param {number} layerId - The layer in whichthe pin is stored.
+ * @param {bool} options.recreate - Whether a new tab should be created in any case.
+ * @param {bool} options.reset - Whether the tab should be reset to the pinned URL.
+ * @param {bool} options.summon - Whether the tab should be moved near the currently active tab.
+ */
 async function focusTab(key, layerId, options) {
   const layers = await cache.getLayers();
   const layer = layers.getView([GLOBAL_LAYER_ID, layerId]);
@@ -173,8 +198,8 @@ async function closeTab(key, layerId) {
 
 async function closeTabs(layerId) {
   const layerIds = [layerId];  // No global: require global tabs to be closed explicitly
-  const pins = await listPins(layerIds);
-  await Promise.all(Object.values(pins).map(async (pin) => {
+  const entries = await listPins(layerIds);
+  await Promise.all(entries.map(async ({ pin }) => {
     if (pin.tabId == null) {
       return;
     }
@@ -186,15 +211,12 @@ async function closeUnpinnedTabs(layerId) {
   const selectedLayerIds = (layerId == null)
     ? LAYER_IDS.map(kid => [kid])
     : [[GLOBAL_LAYER_ID, layerId]];
-  const allPins = await Promise.all(selectedLayerIds.map(async (layerIds) => {
-    const pins = await listPins(layerIds);
-    delete pins[HISTORY_KEY];
-    return pins;
-  }));
-  const allPinnedTabIds = allPins.map((pins) => {
-    return Object.values(pins)
-      .filter((pin) => (pin.tabId != null))
-      .map((pin) => pin.tabId);
+  const entrySets = await Promise.all(selectedLayerIds.map((layerIds) => listPins(layerIds)));
+  const allPinnedTabIds = entrySets.map((entries) => {
+    return entries
+      .filter(({ pin }) => (pin.tabId != null))
+      .filter(({ keyRef }) => (keyRef.key != 'HISTORY_KEY'))
+      .map(({ pin }) => pin.tabId);
   }).map((tabIds) => new Set(tabIds))
     .reduce((agg, val) => agg.union(val), new Set());
   const allTabs = await chrome.tabs.query({});
@@ -261,9 +283,9 @@ const server = new Server({
       } else {
         throw new UserException(`Bad dupe scope: ${args.options.dupeScope}`);
       }
-      const ref = await findPin(currentTab.id, layerIds);
-      if (ref) {
-        throw new UserException(`This tab is already pinned at ${ref.key} in layer ${ref.layerId}.`);
+      const entry = await findPin(currentTab.id, layerIds);
+      if (entry) {
+        throw new UserException(`This tab is already pinned at ${entry.keyRef.key} in layer ${entry.keyRef.layerId}.`);
       }
     }
     const layers = await cache.getLayers();
@@ -329,6 +351,7 @@ const server = new Server({
     await cache.flush();
     return { layerId };
   },
+  // TODO: Implement next/prev tab. Idea: Implement "findNext/findPrev key ref" and feed that into focusTab().
   'focusTab': async (args) => {
     await focusTab(args.key, args.layerId, args.options);
     await cache.flush();
@@ -361,20 +384,20 @@ const server = new Server({
   },
   'listPins': async (args) => {
     const layerIds = args.withoutGlobal ? [args.layerId] : [GLOBAL_LAYER_ID, args.layerId]
-    const pins = await listPins(layerIds);
+    const entries = await listPins(layerIds);
     await cache.flush();
-    return pins;
+    return entries;
   },
   'getActiveKey': async (args) => {
     const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
     if (!currentTab) {
       throw new UserException('There is no active tab.');
     }
-    const keyRef = findPin(currentTab.id, LAYER_IDS);
-    if (!keyRef) {
+    const entry = await findPin(currentTab.id, LAYER_IDS);
+    if (!entry) {
       throw new UserException(`No pin found for current tab "${currentTab.title}" (${currentTab.url}).`);
     }
-    return keyRef;
+    return entry.keyRef;
   },
 });
 

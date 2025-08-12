@@ -20,7 +20,6 @@ let layerId;
 async function refreshPinnedTabs() {
   const state = await background.getState();
   layerId = state.layerId;
-  const pins = await background.listPins({ layerId });
   document.querySelectorAll('#keyboard [data-keycode]').forEach((key) => {
     const keyCode = key.getAttribute('data-keycode');
     const digit = parseDigitKeycode(keyCode);
@@ -32,11 +31,11 @@ async function refreshPinnedTabs() {
     }
     key.classList.remove('key-glow-blue');
   });
-  Object.keys(pins).forEach((key) => {
-    const pin = pins[key];
-    const keyDiv = document.getElementById(`key${key}`);
+  const entries = await background.listPins({ layerId });
+  entries.forEach(({keyRef, pin}) => {
+    const keyDiv = document.getElementById(`key${keyRef.key}`);
     if (!keyDiv) {
-      throw new Error(`No keyDiv found for ${key} / ${JSON.stringify(pin)}`);
+      throw new Error(`No keyDiv found for ${keyRef.key} / ${JSON.stringify(pin)}`);
     }
     keyDiv.setAttribute('data-tooltip', pin.title);
     keyDiv.replaceChildren(createIcon(pin));
