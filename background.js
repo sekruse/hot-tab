@@ -250,6 +250,22 @@ const server = new Server({
     if (!currentTab) {
       throw new UserException(`There is no active tab to be pinned.`);
     }
+    if (args.options?.dupeScope) {
+      let layerIds;
+      if (args.options.dupeScope == 'layer') {
+        layerIds = [args.layerId];
+      } else if (args.options.dupeScope == 'view') {
+        layerIds = [GLOBAL_LAYER_ID, args.layerId];
+      } else if (args.options.dupeScope == 'global') {
+        layerIds = LAYER_IDS;
+      } else {
+        throw new UserException(`Bad dupe scope: ${args.options.dupeScope}`);
+      }
+      const ref = await findPin(currentTab.id, layerIds);
+      if (ref) {
+        throw new UserException(`This tab is already pinned at ${ref.key} in layer ${ref.layerId}.`);
+      }
+    }
     const layers = await cache.getLayers();
     const layer = layers.getView([GLOBAL_LAYER_ID, args.layerId]);
     let key = args.key;

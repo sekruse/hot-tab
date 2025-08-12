@@ -243,7 +243,9 @@ const defaultComboDescriptors = function() {
     sequence: ';#',
     descriptor: {
       method: 'pinTab',
-      argTransformer: ([partialKeyRef]) => { return { ...partialKeyRef, options: { pinScope: 'page' } }; },
+      argTransformer: ([partialKeyRef], withDefaultLayerId) => {
+        return { ...withDefaultLayerId(partialKeyRef), options: { pinScope: 'page', dupeScope: 'view' } };
+      },
       closePopup: true,
     },
   });
@@ -251,7 +253,9 @@ const defaultComboDescriptors = function() {
     sequence: ';;',
     descriptor: {
       method: 'pinTab',
-      argTransformer: (_, withDefaultLayerId) => withDefaultLayerId({ options: { pinScope: 'page' } }),
+      argTransformer: (_, withDefaultLayerId) => {
+        return { ...withDefaultLayerId({}), options: { pinScope: 'page', dupeScope: 'view' } };
+      },
       closePopup: true,
     },
   });
