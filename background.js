@@ -1,7 +1,7 @@
 import { Server, UserException } from './lpc.js';
 import { Cache } from './storage.js';
 import combos from './combos.js';
-import { LAYER_IDS, GLOBAL_LAYER_ID, HISTORY_KEY, keyOrder } from './keys.js';
+import { LAYER_IDS, GLOBAL_LAYER_ID, HISTORY_KEY, keyOrder, indexByKeyCode } from './keys.js';
 const cache = new Cache();
 
 /**
@@ -76,6 +76,25 @@ async function findPin(tabId, layerIds) {
       }
     }
   }
+}
+
+async function findNeighborPin(tabId, layerIds, shift) {
+  const entries = await listPins(layerIds);
+  if (entries.length == 0) {
+    throw new UserException(`No tabs are pinned.`);
+  }
+  entries
+    .filter((e) => indexByKeyCode.has(e.keyRef.key))
+    .sort((e1, e2) => indexByKeyCode.get(e1.keyRef.key) - indexByKeyCode.get(e2.keyRef.key));
+  let curIndex = entries.findIndex((e) => e.pin.tabId == tabId);
+  let nextIndex;
+  if (curIndex == -1) {
+    nextIndex = (shift >= 0) ? 0 : -1;
+  } else {
+    nextIndex = curIndex + shift;
+  }
+  nextIndex = (nextIndex + entries.length) % entries.length
+  return entries[nextIndex];
 }
 
 /**
@@ -351,9 +370,18 @@ const server = new Server({
     await cache.flush();
     return { layerId };
   },
-  // TODO: Implement next/prev tab. Idea: Implement "findNext/findPrev key ref" and feed that into focusTab().
   'focusTab': async (args) => {
     await focusTab(args.key, args.layerId, args.options);
+    await cache.flush();
+  },
+  'focusNeighborTab': async (args) => {
+    const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    if (!currentTab) {
+      throw new UserException('There is no active tab.');
+    }
+    // The global layer is intentionally excluded.
+    const entry = await findNeighborPin(currentTab.id, [args.layerId], args.shift);
+    await focusTab(entry.keyRef.key, entry.keyRef.layerId, args.options);
     await cache.flush();
   },
   'closeTab': async (args) => {

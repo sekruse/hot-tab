@@ -8,7 +8,7 @@ import tooltip from './tooltip.js';
 const background = new Client([
   'getState', 'setActiveLayerId',
   'getPin', 'listPins', 'getActiveKey', 'pinTab',
-  'focusTab', 'closeTab', 'closeTabs', 'closeUnpinnedTabs',
+  'focusTab', 'focusNeighborTab', 'closeTab', 'closeTabs', 'closeUnpinnedTabs',
   'clearLayer', 'removePin',
   'updatePin',
   'toggleTabPinned',

@@ -118,6 +118,26 @@ const defaultComboDescriptors = function() {
     },
   });
   combos.push({
+    sequence: 'n',
+    descriptor: {
+      method: 'focusNeighborTab',
+      argTransformer: function(_, withDefaultLayerId) {
+        return { ...withDefaultLayerId({}), shift: 1, options: {} };
+      },
+      closePopup: true,
+    },
+  });
+  combos.push({
+    sequence: 'p',
+    descriptor: {
+      method: 'focusNeighborTab',
+      argTransformer: function(_, withDefaultLayerId) {
+        return { ...withDefaultLayerId({}), shift: -1, options: {} };
+      },
+      closePopup: true,
+    },
+  });
+  combos.push({
     sequence: 'k#',
     descriptor: {
       method: 'setActiveLayerId',
