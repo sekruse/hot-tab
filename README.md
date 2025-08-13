@@ -69,11 +69,15 @@ The table below lists all supported command combos. Squared brackets (`[...]`) d
 | --- | --- | --- |
 | `p[<layer>]<key>` | Pin the current tab under the given key. The pin's URL pattern will be set to the tab URL's origin (i.e., `protocol://host/*`), so that when the pin becomes detached from its tab, it will bind to any other tab under the same host. | This is the same as `Ctrl`+`<key>` (`⌃<key>` on macOS) in the popup window. |
 | `P[<layer>]<key>` | Pin the current tab under the given key. The pin's URL pattern will be set to the tab URL's origin and path (i.e., `protocol://host/some/path`), so that when the pin becomes detached from its tab, it will bind only to tabs at the very same host and path. | |
+| `;<layer>` | Pin the current tab under the next free key in the specified layer. The pin's URL pattern will be set to the tab URL's origin and path (i.e., `protocol://host/some/path`), so that when the pin becomes detached from its tab, it will bind only to tabs at the very same host and path. | |
+| `;;` | Pin the current tab under the next free key in the current layer. The pin's URL pattern will be set to the tab URL's origin and path (i.e., `protocol://host/some/path`), so that when the pin becomes detached from its tab, it will bind only to tabs at the very same host and path. | |
 | `z` | Highlight the key with the currently pinned tab. | Only in the popup window, not for programmable shortcuts. |
 | `g[<layer>]<key>` | Go the pinned tab. | This is the same as pressing only `<key>` in the popup window. |
 | `G[<layer>]<key>` | Bring the pinned tab to the current window and make it the active tab. | This is the same as `Shift`+`<key>` (`⇧<key>` on macOS) in the popup window. |
 | `f[<layer>]<key>` | Create a new tab with the pinned URL. | |
 | `r[<layer>]<key>` | Go to the pinned tab and reset it, i.e., navigate to the pinned URL. | |
+| `n` | Go to the next pin in the current layer. | |
+| `p` | Go to the previous pin in the current layer. | |
 | `x[<layer>]<key>` | Close the pinned tab. | |
 | `X<layer>` | Close all pinned tabs from the layer. | |
 | `XX` | Close all pinned tabs from the current layer. | |
