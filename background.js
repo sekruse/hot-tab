@@ -254,7 +254,7 @@ const server = new Server({
   },
   'setActiveLayerId': async (args) => {
     const state = await cache.getState();
-    if (args.layerId) {
+    if (args.layerId != null) {
       state.setLayerId(args.layerId);
     } else {
       const layers = await cache.getLayers();
