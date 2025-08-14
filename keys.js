@@ -35,14 +35,6 @@ export const keysByInputChar = keys.reduce((map, key) => map.set(key.inputChar, 
 export function isModifier(keyCode) {
   return keyCode.match(/^((Shift|Control|Alt|Meta)(Left|Right)|CapsLock)$/) ? true : false;
 }
-// TODO: Allow to control this sequence as part of the extension options.
-export const keyOrder = ORDERED_INPUT_CHARS.split('').reduce(
-  (agg, val) => {
-    agg.push(keysByInputChar.get(val));
-    return agg;
-  }, []);
-
-export const indexByKeyCode = keyOrder.reduce((acc, val, idx) => acc.set(val, idx), new Map());
 
 export function createIcon(pin, extraClasses) {
   const iconFallback = document.createElement('div');

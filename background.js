@@ -1,7 +1,7 @@
 import { Server, UserException } from './lpc.js';
 import { Cache } from './storage.js';
 import combos from './combos.js';
-import { LAYER_IDS, GLOBAL_LAYER_ID, HISTORY_KEY, keyOrder, indexByKeyCode } from './keys.js';
+import { LAYER_IDS, GLOBAL_LAYER_ID, HISTORY_KEY } from './keys.js';
 const cache = new Cache();
 
 /**
@@ -83,6 +83,8 @@ async function findNeighborPin(tabId, layerIds, shift) {
   if (entries.length == 0) {
     throw new UserException(`No tabs are pinned.`);
   }
+  const options = await cache.getOptions();
+  let indexByKeyCode = options.getKeyOrderIndexedByKeyCode();
   entries
     .filter((e) => indexByKeyCode.has(e.keyRef.key))
     .sort((e1, e2) => indexByKeyCode.get(e1.keyRef.key) - indexByKeyCode.get(e2.keyRef.key));
@@ -311,6 +313,8 @@ const server = new Server({
     const layer = layers.getView([GLOBAL_LAYER_ID, args.layerId]);
     let key = args.key;
     if (!key) {
+      const options = await cache.getOptions();
+      const keyOrder = options.getKeyOrder();
       for (let i = 0; i < keyOrder.length; i++) {
         const nextKey = keyOrder[i];
         if (!layer.get(nextKey.keyCode)) {
