@@ -213,8 +213,22 @@ class Options {
     this.dirty = true;
   }
   setKeyOrder(inputChars) {
-    // TODO: Transform, verify, update.
-    throw new UserException("Updating the key order is not yet implemented.");
+    if (!inputChars) {
+      throw new UserException("No key order provided.");
+    }
+    const duplicateChecker = new Set();
+    for (let i = 0; i < inputChars.length; i++) {
+      const ch = inputChars.charAt(i);
+      if (!keysByInputChar.has(ch)) {
+        throw new UserException(`Not a valid character for the key order: ${ch}`);
+      }
+      if (duplicateChecker.has(ch)) {
+        throw new UserException(`Character appears twice: ${ch}`);
+      }
+      duplicateChecker.add(ch);
+    }
+    this.data.keyOrder = inputChars;
+    this.dirty = true;
   }
   getKeyOrder() {
     return this.data.keyOrder.split('').reduce(

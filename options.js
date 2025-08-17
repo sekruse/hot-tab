@@ -1,9 +1,18 @@
 import { Client } from './lpc.js';
 import toast from './toast.js';
 
-const background = new Client(['listCommandCombos', 'setCommandCombo']);
+const background = new Client([
+  'listCommandCombos', 'setCommandCombo',
+  'getKeyOrder', 'setKeyOrder',
+]);
 
-async function refereshShortcuts() {
+async function refreshKeyOrder() {
+  const orderInput = document.getElementById('orderInput');
+  const keyOrder = await background.getKeyOrder();
+  orderInput.value = keyOrder.map((key) => key.inputChar).join('');
+}
+
+async function refreshShortcuts() {
   const shortcutGrid = document.getElementById('shortcutGrid');
   const commands = await chrome.commands.getAll();
   const combos = await background.listCommandCombos();
@@ -48,4 +57,12 @@ async function refereshShortcuts() {
     });
 }
 
-document.addEventListener('DOMContentLoaded', toast.catch(refereshShortcuts));
+document.addEventListener('DOMContentLoaded', toast.catch(async () => {
+  await refreshKeyOrder();
+  await refreshShortcuts();
+  const orderInput = document.getElementById('orderInput');
+  orderInput.addEventListener('input', toast.catch(async (event) => {
+    await background.setKeyOrder({ inputChars: event.target.value });
+    await refreshKeyOrder();
+  }));
+}));

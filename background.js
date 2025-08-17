@@ -288,6 +288,15 @@ const server = new Server({
     options.setCommandCombo(args.command, args.combo);
     await cache.flush();
   },
+  'getKeyOrder': async () => {
+    const options = await cache.getOptions();
+    return options.getKeyOrder();
+  },
+  'setKeyOrder': async (args) => {
+    const options = await cache.getOptions();
+    options.setKeyOrder(args.inputChars.toUpperCase());
+    await cache.flush();
+  },
   'pinTab': async (args) => {
     const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
     if (!currentTab) {

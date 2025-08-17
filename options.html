@@ -6,10 +6,18 @@
   <link rel="stylesheet" href="./options.css">
 </head>
 <body>
-  <section>
-    <h1>Shortcut Actions</h1>
+  <h1>Hot Tab Options</h1>
+
+  <section class="options-card">
+    <h2>Key Order</h2>
+     <p class="margin-top-double">Below, you can configure the order of keys used to associate with. This order is used for pinning tabs in the next free space (<code>;;</code>) and for cycling through tabs (<code>n</code>, <code>p</code>).</p>
+      <input id="orderInput" type="text" class="font-monospace margin-top-double">
+  </section>
+
+  <section class="options-card margin-top-double">
+    <h2>Shortcut Actions</h2>
     <p class="margin-top-double">This options page lets you assign command combos to command slots. Before assigning command combos, you'll need to assign shortcuts to however many command slots you'd like to use in Chrome's shortcut menu. You can type in <code>chrome://extensions/shortcuts</code> in the address bar to get to that menu.</p>
-    <div class="options-card shortcut-grid margin-top-double" id="shortcutGrid"></div>
+    <div class="shortcut-grid margin-top-double" id="shortcutGrid"></div>
   </section>
 
   <!-- Toast -->
