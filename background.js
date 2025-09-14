@@ -397,6 +397,29 @@ const server = new Server({
     await focusTab(entry.keyRef.key, entry.keyRef.layerId, args.options);
     await cache.flush();
   },
+  'moveWindows': async (args) => {
+    const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    if (!currentTab) {
+      throw new UserException('There is no active tab.');
+    }
+    let windows = await chrome.windows.getAll({
+      windowTypes: ['normal'],
+    });
+    const acceptedWindowStates = new Set(['normal', 'maximized', 'fullscreen']);
+    windows = windows.filter((w) => !w.incognito && acceptedWindowStates.has(w.state));
+    if (windows.length < 2) {
+      throw new UserException('Need to have at least two normal windows to move tabs.');
+    }
+    windows.sort((a, b) => (a.top + a.left) - (b.top + b.left));
+    const i = windows.findIndex((w) => w.id == currentTab.windowId);
+    if (i == -1) {
+      throw new UserException('The current tab is not part of a normal window.');
+    }
+    const nextWindow = windows[(i + (args.delta || 1) + windows.length) % windows.length];
+    await chrome.tabs.move(currentTab.id, { index: -1, windowId: nextWindow.id });
+    await chrome.tabs.update(currentTab.id, { active: true });
+    await chrome.windows.update(nextWindow.id, { focused: true });
+  },
   'closeTab': async (args) => {
     await closeTab(args.key, args.layerId);
     await cache.flush();
