@@ -77,7 +77,7 @@ The table below lists all supported command combos. Squared brackets (`[...]`) d
 | `f[<layer>]<key>` | Create a new tab with the pinned URL. | |
 | `r[<layer>]<key>` | Go to the pinned tab and reset it, i.e., navigate to the pinned URL. | |
 | `n` | Go to the next pin in the current layer. | |
-| `p` | Go to the previous pin in the current layer. | |
+| `N` | Go to the previous pin in the current layer. | |
 | `x[<layer>]<key>` | Close the pinned tab. | |
 | `X<layer>` | Close all pinned tabs from the layer. | |
 | `XX` | Close all pinned tabs from the current layer. | |

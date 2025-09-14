@@ -128,7 +128,7 @@ const defaultComboDescriptors = function() {
     },
   });
   combos.push({
-    sequence: 'p',
+    sequence: 'N',
     descriptor: {
       method: 'focusNeighborTab',
       argTransformer: function(_, withDefaultLayerId) {
