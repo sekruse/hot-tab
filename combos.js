@@ -118,6 +118,26 @@ const defaultComboDescriptors = function() {
     },
   });
   combos.push({
+    sequence: 'n',
+    descriptor: {
+      method: 'focusNeighborTab',
+      argTransformer: function(_, withDefaultLayerId) {
+        return { ...withDefaultLayerId({}), shift: 1, options: {} };
+      },
+      closePopup: true,
+    },
+  });
+  combos.push({
+    sequence: 'N',
+    descriptor: {
+      method: 'focusNeighborTab',
+      argTransformer: function(_, withDefaultLayerId) {
+        return { ...withDefaultLayerId({}), shift: -1, options: {} };
+      },
+      closePopup: true,
+    },
+  });
+  combos.push({
     sequence: 'k#',
     descriptor: {
       method: 'setActiveLayerId',
@@ -235,6 +255,26 @@ const defaultComboDescriptors = function() {
       method: 'pinTab',
       argTransformer: function([keyRef], withDefaultLayerId) {
         return { ...withDefaultLayerId(keyRef), options: { pinScope: 'page' } };
+      },
+      closePopup: true,
+    },
+  });
+  combos.push({
+    sequence: ';#',
+    descriptor: {
+      method: 'pinTab',
+      argTransformer: ([partialKeyRef], withDefaultLayerId) => {
+        return { ...withDefaultLayerId(partialKeyRef), options: { pinScope: 'page', dupeScope: 'view' } };
+      },
+      closePopup: true,
+    },
+  });
+  combos.push({
+    sequence: ';;',
+    descriptor: {
+      method: 'pinTab',
+      argTransformer: (_, withDefaultLayerId) => {
+        return { ...withDefaultLayerId({}), options: { pinScope: 'page', dupeScope: 'view' } };
       },
       closePopup: true,
     },

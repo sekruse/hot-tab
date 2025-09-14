@@ -1,6 +1,6 @@
 .shortcut-grid {
   display: grid;
-  grid-template-columns: 150px 150px 100px;
+  grid-template-columns: 3fr 3fr 2fr;
   row-gap: 1ex;
 }
 
@@ -11,6 +11,6 @@
   border-radius: 10px;
   box-shadow: 1px 1px 4px 0px #797878;
   background-color: #eeeeee;
-  max-width: 500px;
+  max-width: 700px;
   width: 90%;
 }

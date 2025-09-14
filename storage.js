@@ -1,5 +1,5 @@
 import { UserException } from './lpc.js';
-import { LAYER_IDS } from './keys.js';
+import { LAYER_IDS, keysByInputChar } from './keys.js';
 
 const defaultState = {
   layerId: 1,
@@ -43,6 +43,7 @@ const defaultOptions = {
     "command-29": "",
     "command-30": "",
   },
+  keyOrder: "ASDFGZXCVB",
 };
 
 export class Cache {
@@ -89,7 +90,7 @@ export class Cache {
 
 class State {
   constructor(data) {
-    this.data = {...defaultState, ...data};
+    this.data = { ...defaultState, ...data };
     this.dirty = false;
   }
   getLayerId() {
@@ -101,7 +102,7 @@ class State {
   }
   async flush() {
     if (this.dirty) {
-      await chrome.storage.local.set({'state': this.data});
+      await chrome.storage.local.set({ 'state': this.data });
       this.dirty = false;
     }
   }
@@ -109,7 +110,7 @@ class State {
 
 class Layers {
   constructor(data) {
-    this.data = {...defaultLayers, ...data};
+    this.data = { ...defaultLayers, ...data };
     this.dirty = false;
   }
   set(keyRef, val) {
@@ -131,7 +132,7 @@ class Layers {
   }
   async flush() {
     if (this.dirty) {
-      await chrome.storage.local.set({'keysets': this.data});
+      await chrome.storage.local.set({ 'keysets': this.data });
       this.dirty = false;
     }
   }
@@ -198,7 +199,7 @@ class Layer {
 
 class Options {
   constructor(data) {
-    this.data = {...defaultOptions, ...data};
+    this.data = { ...defaultOptions, ...data };
     this.dirty = false;
   }
   listCommandCombos() {
@@ -211,9 +212,37 @@ class Options {
     this.data.commandCombos[command] = combo;
     this.dirty = true;
   }
+  setKeyOrder(inputChars) {
+    if (!inputChars) {
+      throw new UserException("No key order provided.");
+    }
+    const duplicateChecker = new Set();
+    for (let i = 0; i < inputChars.length; i++) {
+      const ch = inputChars.charAt(i);
+      if (!keysByInputChar.has(ch)) {
+        throw new UserException(`Not a valid character for the key order: ${ch}`);
+      }
+      if (duplicateChecker.has(ch)) {
+        throw new UserException(`Character appears twice: ${ch}`);
+      }
+      duplicateChecker.add(ch);
+    }
+    this.data.keyOrder = inputChars;
+    this.dirty = true;
+  }
+  getKeyOrder() {
+    return this.data.keyOrder.split('').reduce(
+      (agg, val) => {
+        agg.push(keysByInputChar.get(val));
+        return agg;
+      }, []);
+  }
+  getKeyOrderIndexedByKeyCode() {
+    return this.getKeyOrder().reduce((acc, val, idx) => acc.set(val, idx), new Map());
+  }
   async flush() {
     if (this.dirty) {
-      await chrome.storage.local.set({'options': this.data});
+      await chrome.storage.local.set({ 'options': this.data });
       this.dirty = false;
     }
   }
