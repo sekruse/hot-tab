@@ -249,6 +249,13 @@ async function closeUnpinnedTabs(layerId) {
   }));
 }
 
+/**
+ * Calculates (n + k) mod mod.
+ */
+function plusMod(n, k, mod) {
+  return (n + k + mod) % mod;
+}
+
 const server = new Server({
   'getState': async (args) => {
     const state = await cache.getState();
@@ -396,6 +403,54 @@ const server = new Server({
     const entry = await findNeighborPin(currentTab.id, [args.layerId], args.shift);
     await focusTab(entry.keyRef.key, entry.keyRef.layerId, args.options);
     await cache.flush();
+  },
+  'moveWindows': async (args) => {
+    const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    if (!currentTab) {
+      throw new UserException('There is no active tab.');
+    }
+    if (args.createWindow) {
+      await chrome.windows.create({
+        focused: true,
+        tabId: currentTab.id,
+      });
+      return;
+    }
+    let windows = await chrome.windows.getAll({
+      windowTypes: ['normal'],
+    });
+    const acceptedWindowStates = new Set(['normal', 'maximized', 'fullscreen']);
+    windows = windows.filter((w) => !w.incognito && acceptedWindowStates.has(w.state));
+    if (windows.length < 2) {
+      throw new UserException('Need to have at least two normal windows to move tabs.');
+    }
+    windows.sort((a, b) => (a.top + a.left) - (b.top + b.left));
+    const i = windows.findIndex((w) => w.id == currentTab.windowId);
+    if (i == -1) {
+      throw new UserException('The current tab is not part of a normal window.');
+    }
+    const nextWindow = windows[plusMod(i, args.delta || 1, windows.length)];
+    await chrome.tabs.move(currentTab.id, { index: -1, windowId: nextWindow.id });
+    await chrome.tabs.update(currentTab.id, { active: true });
+    await chrome.windows.update(nextWindow.id, { focused: true });
+  },
+  'moveTab': async (args) => {
+    const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    if (!currentTab) {
+      throw new UserException('There is no active tab.');
+    }
+    let window = await chrome.windows.get(currentTab.windowId, { populate: true, windowTypes: ['normal'] });
+    if (!window) {
+      throw new UserException('Cannot move around tabs in the current window.');
+    }
+    let firstUnpinnedIndex = window.tabs.findLastIndex((t) => t.pinned) + 1;
+    let nextIndex;
+    if (currentTab.pinned) {
+      nextIndex = plusMod(currentTab.index, (args.delta || 1), firstUnpinnedIndex);
+    } else {
+      nextIndex = plusMod(currentTab.index - firstUnpinnedIndex, (args.delta || 1), window.tabs.length - firstUnpinnedIndex) + firstUnpinnedIndex;
+    }
+    await chrome.tabs.move(currentTab.id, { index: nextIndex });
   },
   'closeTab': async (args) => {
     await closeTab(args.key, args.layerId);

@@ -138,6 +138,56 @@ const defaultComboDescriptors = function() {
     },
   });
   combos.push({
+    sequence: 't',
+    descriptor: {
+      method: 'moveTab',
+      argTransformer: function() {
+        return { delta: 1 };
+      },
+      closePopup: true,
+    },
+  });
+  combos.push({
+    sequence: 'T',
+    descriptor: {
+      method: 'moveTab',
+      argTransformer: function() {
+        return { delta: -1 };
+      },
+      closePopup: true,
+    },
+  });
+  combos.push({
+    sequence: 'w',
+    descriptor: {
+      method: 'moveWindows',
+      argTransformer: function() {
+        return { delta: 1 };
+      },
+      closePopup: true,
+    },
+  });
+  combos.push({
+    sequence: 'W',
+    descriptor: {
+      method: 'moveWindows',
+      argTransformer: function() {
+        return { delta: -1 };
+      },
+      closePopup: true,
+    },
+  });
+  combos.push({
+    sequence: 'Q',
+    descriptor: {
+      method: 'moveWindows',
+      argTransformer: function() {
+        return { createWindow: true };
+      },
+      closePopup: true,
+    },
+  });
+  combos.push({
     sequence: 'k#',
     descriptor: {
       method: 'setActiveLayerId',
