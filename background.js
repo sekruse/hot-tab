@@ -409,6 +409,13 @@ const server = new Server({
     if (!currentTab) {
       throw new UserException('There is no active tab.');
     }
+    if (args.createWindow) {
+      await chrome.windows.create({
+        focused: true,
+        tabId: currentTab.id,
+      });
+      return;
+    }
     let windows = await chrome.windows.getAll({
       windowTypes: ['normal'],
     });

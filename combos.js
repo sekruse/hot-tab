@@ -178,6 +178,16 @@ const defaultComboDescriptors = function() {
     },
   });
   combos.push({
+    sequence: 'Q',
+    descriptor: {
+      method: 'moveWindows',
+      argTransformer: function() {
+        return { createWindow: true };
+      },
+      closePopup: true,
+    },
+  });
+  combos.push({
     sequence: 'k#',
     descriptor: {
       method: 'setActiveLayerId',
