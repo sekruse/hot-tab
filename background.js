@@ -145,7 +145,7 @@ async function focusTab(key, layerId, options) {
   let { tab: pinnedTab } = await findTab(pin, { key, layerId });
   const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
 
-  if (pinnedTab === null || options?.recreate) {
+  if (pinnedTab == null || options?.recreate) {
     // We need to create a new tab.
     const createOptions = {};
     if (currentTab) {
