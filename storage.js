@@ -130,6 +130,9 @@ class Layers {
   getView(layerIds) {
     return new Layer(this, layerIds);
   }
+  listAllEntries() {
+    return LAYER_IDS.flatMap(l => this.getView([l]).listEntries());
+  }
   async flush() {
     if (this.dirty) {
       await chrome.storage.local.set({ 'keysets': this.data });
