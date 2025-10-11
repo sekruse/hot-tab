@@ -138,6 +138,51 @@ const defaultComboDescriptors = function() {
     },
   });
   combos.push({
+    sequence: 'hp',
+    descriptor: {
+      method: 'highlight',
+      argTransformer: function() {
+        return { variant: 'pinned' };
+      },
+    },
+  });
+  combos.push({
+    sequence: 'hll',
+    descriptor: {
+      method: 'highlight',
+      argTransformer: function() {
+        return { variant: 'layer' };
+      },
+    },
+  });
+  combos.push({
+    sequence: 'hl#',
+    descriptor: {
+      method: 'highlight',
+      argTransformer: ([partialKeyRef], withDefaultLayerId) => {
+        return { variant: 'layer', layerId: withDefaultLayerId(partialKeyRef).layerId };
+      },
+    },
+  });
+  combos.push({
+    sequence: 'hw',
+    descriptor: {
+      method: 'highlight',
+      argTransformer: () => {
+        return { variant: 'window' };
+      },
+    },
+  });
+  combos.push({
+    sequence: 'hi',
+    descriptor: {
+      method: 'highlight',
+      argTransformer: () => {
+        return { variant: 'invert' };
+      },
+    },
+  });
+  combos.push({
     sequence: 't',
     descriptor: {
       method: 'moveTab',

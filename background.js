@@ -531,6 +531,44 @@ const server = new Server({
     await closeTabs(args.layerId);
     await cache.flush();
   },
+  'highlight': async (args) => {
+    const currentWindow = await chrome.windows.getCurrent({ populate: true });
+    if (currentWindow == null) {
+      throw new UserException('There is no active window with tabs.');
+    }
+    let indexes;
+    if (args.variant == 'layer' || args.variant == 'pinned') {
+      let entries;
+      if (args.variant == 'layer') {
+        let layerId;
+        if (args?.layerId != null) {
+          layerId = args.layerId;
+        } else {
+          const state = await cache.getState();
+          layerId = state.getLayerId();
+        }
+        entries = await listPins([layerId]);
+      } else {
+        entries = await listPins();
+      }
+      const tabIds = entries.map(({ pin }) => pin.tabId)
+        .filter((tabId) => tabId != null);
+      const tabs = await Promise.all(tabIds.map((tabId) => chrome.tabs.get(tabId)));
+      indexes = tabs.filter((tab) => tab.windowId == currentWindow.id)
+        .map((tab) => tab.index);
+    } else if (args.variant == 'window') {
+      indexes = currentWindow.tabs.map((tab) => tab.index);
+    } else if (args.variant == 'invert') {
+      indexes = currentWindow.tabs.filter((tab) => !tab.highlighted)
+        .map((tab) => tab.index);
+    } else {
+      throw new Error(`Unknown highlight variant: ${args.variant}`);
+    }
+    if (indexes.length == 0) {
+      throw new UserException('No pins to highlight.');
+    }
+    await chrome.tabs.highlight({ windowId: currentWindow.id, tabs: indexes });
+  },
   'toggleTabPinned': async (args) => {
     const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
     if (!tab) {

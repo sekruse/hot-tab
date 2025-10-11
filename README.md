@@ -78,6 +78,10 @@ The table below lists all supported command combos. Squared brackets (`[...]`) d
 | `r[<layer>]<key>` | Go to the pinned tab and reset it, i.e., navigate to the pinned URL. | |
 | `n` | Go to the next pin in the current layer. | |
 | `N` | Go to the previous pin in the current layer. | |
+| `hp` | Highlight all tabs in the current window that are pinned in Hot Tab. | |
+| `hll` | Highlight all tabs in the current window that are pinned in the currently active layer. | |
+| `hl<layer>` | Highlight all tabs in the current window that are pinned in the given layer. | |
+| `hi` | Invert the selection of currently highlighted tabs. | |
 | `x[<layer>]<key>` | Close the pinned tab. | |
 | `X<layer>` | Close all pinned tabs from the layer. | |
 | `XX` | Close all pinned tabs from the current layer. | |
