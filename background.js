@@ -47,11 +47,14 @@ async function findTab(pin, keyRef) {
  * @param {?number[]} layerIds - The IDs of the layers to inspect. Leading layers overlay the following layers.
  * @returns {!Promise<Object>} An object whose keys are the key codes of the pins and the values are the pins.
  */
-async function listPins(layerIds) {
+async function listPins(layerIds, options) {
   const layers = await cache.getLayers();
-  const entries = layerIds
+  let entries = layerIds
     ? layers.getView(layerIds).listEntries()
     : layers.listAllEntries();
+  if (!options?.includeHistoryKey) {
+    entries = entries.filter(({ keyRef }) => keyRef.key != HISTORY_KEY);
+  }
   return Promise.all(entries.map(async (entry) => {
     const { pin } = await findTab(entry.value, entry.keyRef);
     return { keyRef: entry.keyRef, pin };
@@ -70,9 +73,6 @@ async function findPin(tabId, layerIds) {
     const entries = await listPins([layerId]);
     for (let j = 0; j < entries.length; j++) {
       const entry = entries[j];
-      if (entry.keyRef.key === HISTORY_KEY) {
-        continue;
-      }
       if (entry.pin.tabId === tabId) {
         return entry;
       }
@@ -238,7 +238,6 @@ async function closeUnpinnedTabs(layerId) {
   const allPinnedTabIds = entrySets.map((entries) => {
     return entries
       .filter(({ pin }) => (pin.tabId != null))
-      .filter(({ keyRef }) => (keyRef.key != 'HISTORY_KEY'))
       .map(({ pin }) => pin.tabId);
   }).map((tabIds) => new Set(tabIds))
     .reduce((agg, val) => agg.union(val), new Set());
@@ -552,7 +551,7 @@ const server = new Server({
   },
   'listPins': async (args) => {
     const layerIds = args.withoutGlobal ? [args.layerId] : [GLOBAL_LAYER_ID, args.layerId]
-    const entries = await listPins(layerIds);
+    const entries = await listPins(layerIds, { includeHistoryKey: true });
     await cache.flush();
     return entries;
   },
