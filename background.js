@@ -1,27 +1,27 @@
 import { Server, UserException } from './lpc.js';
 import { Cache } from './storage.js';
 import combos from './combos.js';
-import { LAYER_IDS, GLOBAL_LAYER_ID, HISTORY_KEY } from './keys.js';
+import { LAYER_IDS, GLOBAL_LAYER_ID, HISTORY_KEY, keysByKeyCode } from './keys.js';
 const cache = new Cache();
+
 
 /**
  * Finds the tab linked to the given pin. It might reassociate the pin with a new tab or set the pin as dangling.
  * @param {Object} pin - The pin to work with.
  * @param {Object} keyRef - A reference to the slot the pin is stored at -- so that it can be updated.
- * @returns {?Object} The tab if any could be found.
+ * @returns {Promise<Object>} The updated pin and the tab if any could be found.
  */
 async function findTab(pin, keyRef) {
   // First, try to retrieve the pinned tab.
   if (pin.tabId !== undefined) {
     try {
-      return await chrome.tabs.get(pin.tabId);
+      return { pin, tab: await chrome.tabs.get(pin.tabId) };
     } catch (error) {
       console.log(`Tab for ${pin.title} not found: ${error}`);
     }
   }
   // Otherwise, try to find a tab that matches the URL pattern.
   const tabs = await chrome.tabs.query({ url: pin.urlPattern });
-  console.log(`Found ${tabs.length} tabs matching ${pin.urlPattern}`);
   if (tabs.length > 0) {
     const tab = tabs[0];
     pin = {
@@ -33,26 +33,28 @@ async function findTab(pin, keyRef) {
     };
     const layers = await cache.getLayers();
     layers.set(keyRef, pin);
-    return tab;
+    return { pin, tab };
   }
   // If none, mark the pin as dangling.
   delete pin.tabId;
   const layers = await cache.getLayers();
   layers.set(keyRef, pin);
-  return null;
+  return { pin };
 }
 
 /**
  * Lists the pins found on the given layers.
- * @param {number[]} layerIds - The IDs of the layers to inspect. Leading layers overlay the following layers.
- * @returns {!Object} An object whose keys are the key codes of the pins and the values are the pins.
+ * @param {?number[]} layerIds - The IDs of the layers to inspect. Leading layers overlay the following layers.
+ * @returns {!Promise<Object>} An object whose keys are the key codes of the pins and the values are the pins.
  */
 async function listPins(layerIds) {
   const layers = await cache.getLayers();
-  const layer = layers.getView(layerIds);
-  return Promise.all(layer.listEntries().map(async (entry) => {
-    await findTab(entry.value, entry.keyRef);
-    return { keyRef: entry.keyRef, pin: entry.value };
+  const entries = layerIds
+    ? layers.getView(layerIds).listEntries()
+    : layers.listAllEntries();
+  return Promise.all(entries.map(async (entry) => {
+    const { pin } = await findTab(entry.value, entry.keyRef);
+    return { keyRef: entry.keyRef, pin };
   }));
 }
 
@@ -60,7 +62,7 @@ async function listPins(layerIds) {
  * Finds a pin for the given tab in the given layers.
  * @param {number} tabId - ID of the Chrome tab to look for
  * @param {number[]} layerIds - The IDs of the layers to inspect.
- * @returns {?Object} An object with the keyRef and pin if a pin could be found.
+ * @returns {Promise<?Object>} An object with the keyRef and pin if a pin could be found.
  */
 async function findPin(tabId, layerIds) {
   for (let i = 0; i < layerIds.length; i++) {
@@ -140,10 +142,10 @@ async function focusTab(key, layerId, options) {
   if (!pin) {
     throw new UserException(`There is no pin at ${key} in layer ${layerId}.`);
   }
-  let pinnedTab = await findTab(pin, { key, layerId });
+  let { tab: pinnedTab } = await findTab(pin, { key, layerId });
   const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
 
-  if (pinnedTab === null || options?.recreate) {
+  if (pinnedTab == null || options?.recreate) {
     // We need to create a new tab.
     const createOptions = {};
     if (currentTab) {
@@ -210,7 +212,7 @@ async function closeTab(key, layerId) {
   if (!pin) {
     throw new UserException(`There is no pin at ${key} in layer ${layerId}.`);
   }
-  const pinnedTab = await findTab(pin, { key, layerId });
+  const { tab: pinnedTab } = await findTab(pin, { key, layerId });
   if (!pinnedTab) {
     return;
   }
@@ -248,6 +250,76 @@ async function closeUnpinnedTabs(layerId) {
     await chrome.tabs.remove(tab.id);
   }));
 }
+
+
+/**
+ * Updates the registered badge texts for the Chrome action item.
+ * @param {Object} options What to register.
+ * @param {Object[]=} options.entries the pins to update for
+ * @param {Object[]=} options.removedEntries the pins to remove
+ * @param {number=} options.layerId the current layer ID
+ */
+async function refreshBadgeTexts(options) {
+  const p = [];
+  if (options.layerId != null) {
+    const text = `${options.layerId}`;
+    p.push(chrome.action.setBadgeText({ text }));
+  }
+  if (options.entries) {
+    for (let i = 0; i < options.entries.length; i++) {
+      const { keyRef, pin } = options.entries[i];
+      if (pin.tabId == null || keyRef.key == HISTORY_KEY) {
+        continue;
+      }
+      const text = `${keyRef.layerId}${keysByKeyCode.get(keyRef.key).char}`;
+      p.push(chrome.action.setBadgeText({ tabId: pin.tabId, text }));
+    }
+  }
+  if (options.removedEntries) {
+    for (let i = 0; i < options.removedEntries.length; i++) {
+      const { keyRef, pin } = options.removedEntries[i];
+      if (pin.tabId == null || keyRef.key == HISTORY_KEY) {
+        continue;
+      }
+      p.push(chrome.action.setBadgeText({ tabId: pin.tabId }));
+    }
+  }
+  return Promise.all(p);
+}
+cache.addPinChangedListener((keyRef, pin, event) => {
+  if (event == 'SET') {
+    return refreshBadgeTexts({ entries: [{ keyRef, pin }] });
+  }
+  if (event == 'DELETE') {
+    return refreshBadgeTexts({ removedEntries: [{ keyRef, pin }] });
+  }
+  throw new Error(`Unknown event type: ${event}`);
+
+});
+cache.addLayerChangedListener((layerId) => {
+  return refreshBadgeTexts({ layerId });
+});
+cache.getState().then((state) => refreshBadgeTexts({ layerId: state.getLayerId() }));
+cache.getLayers()
+  .then((layers) => layers.listAllEntries())
+  .then((entries) => refreshBadgeTexts({
+    entries: entries.map((e) => {
+      return { keyRef: e.keyRef, pin: e.value };
+    }),
+  }));
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  // The badge text is reset when the tab navigates to a new location.
+  // Hence, we need to update it continuously.
+  if (changeInfo.status != 'complete') {
+    return;
+  }
+  const entry = await findPin(tabId, LAYER_IDS);
+  if (!entry) {
+    return;
+  }
+  await refreshBadgeTexts({ entries: [entry] });
+});
+
 
 /**
  * Calculates (n + k) mod mod.

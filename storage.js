@@ -51,18 +51,20 @@ export class Cache {
     this.state = null;
     this.layers = null;
     this.options = null;
+    this.pinChangedListeners = [];
+    this.layerChangedListeners = [];
   }
   async getState() {
     if (this.state === null) {
       const loaded = await chrome.storage.local.get('state');
-      this.state = new State(loaded.state);
+      this.state = new State(loaded.state, this);
     }
     return this.state;
   }
   async getLayers() {
     if (this.layers === null) {
       const loaded = await chrome.storage.local.get('keysets');
-      this.layers = new Layers(loaded.keysets);
+      this.layers = new Layers(loaded.keysets, this);
     }
     return this.layers;
   }
@@ -72,6 +74,12 @@ export class Cache {
       this.options = new Options(loaded.options);
     }
     return this.options;
+  }
+  addPinChangedListener(listener) {
+    this.pinChangedListeners.push(listener);
+  }
+  addLayerChangedListener(listener) {
+    this.layerChangedListeners.push(listener);
   }
   async flush() {
     let p = [];
@@ -89,8 +97,9 @@ export class Cache {
 }
 
 class State {
-  constructor(data) {
+  constructor(data, cache) {
     this.data = { ...defaultState, ...data };
+    this.cache = cache;
     this.dirty = false;
   }
   getLayerId() {
@@ -99,6 +108,10 @@ class State {
   setLayerId(layerId) {
     this.data.layerId = layerId;
     this.dirty = true;
+    for (let i = 0; i < this.cache.layerChangedListeners.length; i++) {
+      const listener = this.cache.layerChangedListeners[i];
+      listener(layerId);
+    }
   }
   async flush() {
     if (this.dirty) {
@@ -109,13 +122,18 @@ class State {
 }
 
 class Layers {
-  constructor(data) {
+  constructor(data, cache) {
     this.data = { ...defaultLayers, ...data };
+    this.cache = cache;
     this.dirty = false;
   }
   set(keyRef, val) {
     this.data[keyRef.layerId][keyRef.key] = val;
     this.dirty = true;
+    for (let i = 0; i < this.cache.pinChangedListeners.length; i++) {
+      const listener = this.cache.pinChangedListeners[i];
+      listener(keyRef, val, 'SET');
+    }
   }
   get(keyRef) {
     return this.data[keyRef.layerId][keyRef.key];
@@ -124,11 +142,19 @@ class Layers {
     if (!(keyRef.key in this.data[keyRef.layerId])) {
       throw new UserException(`No pin for ${keyRef.key} at layer ${keyRef.layerId}.`);
     }
+    const val = this.data[keyRef.layerId][keyRef.key];
     delete this.data[keyRef.layerId][keyRef.key];
     this.dirty = true;
+    for (let i = 0; i < this.cache.pinChangedListeners.length; i++) {
+      const listener = this.cache.pinChangedListeners[i];
+      listener(keyRef, val, 'DELETE');
+    }
   }
   getView(layerIds) {
     return new Layer(this, layerIds);
+  }
+  listAllEntries() {
+    return LAYER_IDS.flatMap(l => this.getView([l]).listEntries());
   }
   async flush() {
     if (this.dirty) {
@@ -176,7 +202,7 @@ class Layer {
       const layerId = this.layerIds[i];
       const layerData = this.layers.data[layerId];
       for (const key in layerData) {
-        if (key in effectiveLayer) {
+        if (layerData[key] == null || key in effectiveLayer) {
           continue;
         }
         effectiveLayer[key] = layerData[key];

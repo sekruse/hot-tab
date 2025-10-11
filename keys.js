@@ -1,7 +1,6 @@
 export const GLOBAL_LAYER_ID = 0;
-export const LAYER_IDS = Array(10).keys().toArray();
+export const LAYER_IDS = Array.from(Array(10).keys());
 export const HISTORY_KEY = 'Backspace';
-const ORDERED_INPUT_CHARS = 'ASDFGZXCVB';
 
 class Key {
   constructor(keyCode, char, inputChar, html) {
