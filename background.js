@@ -535,7 +535,7 @@ const server = new Server({
     await cache.flush();
   },
   'highlight': async (args) => {
-    const currentWindow = await chrome.windows.getCurrent({ populate: true });
+    const currentWindow = await chrome.windows.getCurrent({ populate: true, windowTypes: ['normal'] });
     if (currentWindow == null) {
       throw new UserException('There is no active window with tabs.');
     }
