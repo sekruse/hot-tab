@@ -346,6 +346,22 @@ async function highlightWithRetry(windowId, indices) {
   }
 }
 
+/**
+ * Moves a contiguous block of tabs to a new starting position.
+ * It moves each tab one by one, in reverse order, to prevent
+ * indices from shuffling. This seems to happen with chrome.tabs.move()
+ * when moving multiple tabs to the right.
+ */
+async function moveTabsRight(tabIds, targetStartIndex) {
+  const movedTabs = [];
+  for (let i = tabIds.length - 1; i >= 0; i--) {
+    const tabId = tabIds[i];
+    const targetIndex = targetStartIndex + i;
+    movedTabs[i] = await chrome.tabs.move(tabId, { index: targetIndex });
+  }
+  return movedTabs;
+}
+
 const server = new Server({
   'getState': async (args) => {
     const state = await cache.getState();
@@ -539,22 +555,60 @@ const server = new Server({
     await chrome.windows.update(nextWindow.id, { focused: true });
   },
   'moveTab': async (args) => {
-    const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-    if (!currentTab) {
-      throw new UserException('There is no active tab.');
+    let highlightedTabs = await chrome.tabs.query({ highlighted: true, lastFocusedWindow: true });
+    if (highlightedTabs.length === 0) {
+      throw new UserException('There is no active or highlighted tab.');
     }
-    let window = await chrome.windows.get(currentTab.windowId, { populate: true, windowTypes: ['normal'] });
+    const delta = args.delta || 1;
+
+    // Mixed selection: Unpin all selected tabs first to allow them to move together.
+    const pinnedHighlightedTabs = highlightedTabs.filter((t) => t.pinned);
+    if (pinnedHighlightedTabs.length > 0 && pinnedHighlightedTabs.length < highlightedTabs.length) {
+      await Promise.all(pinnedHighlightedTabs.map((t) => chrome.tabs.update(t.id, { pinned: false })));
+      // Re-query to refresh labels and indices.
+      highlightedTabs = await chrome.tabs.query({ highlighted: true, lastFocusedWindow: true });
+    }
+
+    let window = await chrome.windows.get(highlightedTabs[0].windowId, { populate: true, windowTypes: ['normal'] });
     if (!window) {
       throw new UserException('Cannot move around tabs in the current window.');
     }
-    let firstUnpinnedIndex = window.tabs.findLastIndex((t) => t.pinned) + 1;
-    let nextIndex;
-    if (currentTab.pinned) {
-      nextIndex = plusMod(currentTab.index, (args.delta || 1), firstUnpinnedIndex);
-    } else {
-      nextIndex = plusMod(currentTab.index - firstUnpinnedIndex, (args.delta || 1), window.tabs.length - firstUnpinnedIndex) + firstUnpinnedIndex;
+
+    // Sort to keep relative order.
+    highlightedTabs.sort((a, b) => a.index - b.index);
+
+    // Identify the "block" of tabs to move.
+    const blockSize = highlightedTabs.length;
+    const indices = highlightedTabs.map((t) => t.index);
+    const isContiguous = (indices[blockSize - 1] - indices[0] + 1 === blockSize);
+    const isBlockPinned = highlightedTabs.every((t) => t.pinned);
+
+    // If the tabs are not contiguous, we bring them together rather than moving them.
+    if (!isContiguous) {
+      if (delta < 0) {
+        // Move left = gather tabs after the first highlighted tabs.
+        await chrome.tabs.move(highlightedTabs.map((t) => t.id), { index: indices[0] });
+        return;
+      }
+      // Move right = gather tabs before the last highlighted tabs.
+      const targetStartIndex = indices[blockSize - 1] - (blockSize - 1);
+      await moveTabsRight(highlightedTabs.map((t) => t.id), targetStartIndex);
+      return;
     }
-    await chrome.tabs.move(currentTab.id, { index: nextIndex });
+
+    // Identify movement area (pinned vs unpinned).
+    const firstUnpinnedIndex = window.tabs.findLastIndex((t) => t.pinned) + 1;
+    const areaOffset = isBlockPinned ? 0 : firstUnpinnedIndex;
+    const areaSize = isBlockPinned ? firstUnpinnedIndex : (window.tabs.length - firstUnpinnedIndex);
+
+    // Use right-most for delta > 0, left-most for delta < 0.
+    const startIndex = indices[0];
+    const nextStartIndex = plusMod(startIndex - areaOffset, delta, areaSize - (blockSize - 1)) + areaOffset;
+    if (nextStartIndex > startIndex) {
+      await moveTabsRight(highlightedTabs.map((t) => t.id), nextStartIndex);
+    } else {
+      await chrome.tabs.move(highlightedTabs.map((t) => t.id), { index: nextStartIndex });
+    }
   },
   'closeTab': async (args) => {
     await closeTab(args.key, args.layerId);
