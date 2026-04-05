@@ -47,11 +47,14 @@ async function findTab(pin, keyRef) {
  * @param {?number[]} layerIds - The IDs of the layers to inspect. Leading layers overlay the following layers.
  * @returns {!Promise<Object>} An object whose keys are the key codes of the pins and the values are the pins.
  */
-async function listPins(layerIds) {
+async function listPins(layerIds, options) {
   const layers = await cache.getLayers();
-  const entries = layerIds
+  let entries = layerIds
     ? layers.getView(layerIds).listEntries()
     : layers.listAllEntries();
+  if (!options?.includeHistoryKey) {
+    entries = entries.filter(({ keyRef }) => keyRef.key != HISTORY_KEY);
+  }
   return Promise.all(entries.map(async (entry) => {
     const { pin } = await findTab(entry.value, entry.keyRef);
     return { keyRef: entry.keyRef, pin };
@@ -70,9 +73,6 @@ async function findPin(tabId, layerIds) {
     const entries = await listPins([layerId]);
     for (let j = 0; j < entries.length; j++) {
       const entry = entries[j];
-      if (entry.keyRef.key === HISTORY_KEY) {
-        continue;
-      }
       if (entry.pin.tabId === tabId) {
         return entry;
       }
@@ -87,18 +87,21 @@ async function findNeighborPin(tabId, layerIds, shift) {
   }
   const options = await cache.getOptions();
   let indexByKeyCode = options.getKeyOrderIndexedByKeyCode();
-  entries
+  let finalEntries = entries
     .filter((e) => indexByKeyCode.has(e.keyRef.key))
     .sort((e1, e2) => indexByKeyCode.get(e1.keyRef.key) - indexByKeyCode.get(e2.keyRef.key));
-  let curIndex = entries.findIndex((e) => e.pin.tabId == tabId);
+  if (finalEntries.length == 0) {
+    finalEntries = entries.sort((e1, e2) => e1.keyRef.key.localeCompare(e2.keyRef.key));
+  }
+  let curIndex = finalEntries.findIndex((e) => e.pin.tabId == tabId);
   let nextIndex;
   if (curIndex == -1) {
     nextIndex = (shift >= 0) ? 0 : -1;
   } else {
     nextIndex = curIndex + shift;
   }
-  nextIndex = (nextIndex + entries.length) % entries.length
-  return entries[nextIndex];
+  nextIndex = (nextIndex + finalEntries.length) % finalEntries.length
+  return finalEntries[nextIndex];
 }
 
 /**
@@ -238,7 +241,6 @@ async function closeUnpinnedTabs(layerId) {
   const allPinnedTabIds = entrySets.map((entries) => {
     return entries
       .filter(({ pin }) => (pin.tabId != null))
-      .filter(({ keyRef }) => (keyRef.key != 'HISTORY_KEY'))
       .map(({ pin }) => pin.tabId);
   }).map((tabIds) => new Set(tabIds))
     .reduce((agg, val) => agg.union(val), new Set());
@@ -326,6 +328,38 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
  */
 function plusMod(n, k, mod) {
   return (n + k + mod) % mod;
+}
+
+/**
+ * Attemps to highlight the given tabs in the given window. Retries if the highlight
+ * hasn't been applied correctly, which has been observed on macOS, presumably due to window animations.
+ */
+async function highlightWithRetry(windowId, indices) {
+  for (let i = 0; i < 3; i++) {
+    await chrome.tabs.highlight({ windowId, tabs: indices });
+    const tabs = await chrome.tabs.query({ windowId });
+    const highlightedIndices = tabs.filter((t) => t.highlighted).map((t) => t.index);
+    if (indices.every((idx) => highlightedIndices.includes(idx))) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, i * 50));
+  }
+}
+
+/**
+ * Moves a contiguous block of tabs to a new starting position.
+ * It moves each tab one by one, in reverse order, to prevent
+ * indices from shuffling. This seems to happen with chrome.tabs.move()
+ * when moving multiple tabs to the right.
+ */
+async function moveTabsRight(tabIds, targetStartIndex) {
+  const movedTabs = [];
+  for (let i = tabIds.length - 1; i >= 0; i--) {
+    const tabId = tabIds[i];
+    const targetIndex = targetStartIndex + i;
+    movedTabs[i] = await chrome.tabs.move(tabId, { index: targetIndex });
+  }
+  return movedTabs;
 }
 
 const server = new Server({
@@ -477,15 +511,27 @@ const server = new Server({
     await cache.flush();
   },
   'moveWindows': async (args) => {
-    const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-    if (!currentTab) {
-      throw new UserException('There is no active tab.');
+    const highlightedTabs = await chrome.tabs.query({ highlighted: true, lastFocusedWindow: true });
+    if (highlightedTabs.length === 0) {
+      throw new UserException('There is no active or highlighted tab.');
     }
+    // Maintain relative order by sorting by index.
+    highlightedTabs.sort((a, b) => a.index - b.index);
+
+    const currentTab = highlightedTabs.find((t) => t.active) || highlightedTabs[0];
+    const tabIds = highlightedTabs.map((t) => t.id);
+
     if (args.createWindow) {
-      await chrome.windows.create({
+      const newWindow = await chrome.windows.create({
         focused: true,
         tabId: currentTab.id,
       });
+      const otherTabIds = tabIds.filter((id) => id !== currentTab.id);
+      if (otherTabIds.length > 0) {
+        let movedTabs = await chrome.tabs.move(otherTabIds, { windowId: newWindow.id, index: -1 });
+        if (!Array.isArray(movedTabs)) movedTabs = [movedTabs];
+        await highlightWithRetry(newWindow.id, [currentTab, ...movedTabs].map((t) => t.index));
+      }
       return;
     }
     let windows = await chrome.windows.getAll({
@@ -502,27 +548,67 @@ const server = new Server({
       throw new UserException('The current tab is not part of a normal window.');
     }
     const nextWindow = windows[plusMod(i, args.delta || 1, windows.length)];
-    await chrome.tabs.move(currentTab.id, { index: -1, windowId: nextWindow.id });
+    let movedTabs = await chrome.tabs.move(tabIds, { index: -1, windowId: nextWindow.id });
+    if (!Array.isArray(movedTabs)) movedTabs = [movedTabs];
+    await highlightWithRetry(nextWindow.id, movedTabs.map((t) => t.index));
     await chrome.tabs.update(currentTab.id, { active: true });
     await chrome.windows.update(nextWindow.id, { focused: true });
   },
   'moveTab': async (args) => {
-    const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-    if (!currentTab) {
-      throw new UserException('There is no active tab.');
+    let highlightedTabs = await chrome.tabs.query({ highlighted: true, lastFocusedWindow: true });
+    if (highlightedTabs.length === 0) {
+      throw new UserException('There is no active or highlighted tab.');
     }
-    let window = await chrome.windows.get(currentTab.windowId, { populate: true, windowTypes: ['normal'] });
+    const delta = args.delta || 1;
+
+    // Mixed selection: Unpin all selected tabs first to allow them to move together.
+    const pinnedHighlightedTabs = highlightedTabs.filter((t) => t.pinned);
+    if (pinnedHighlightedTabs.length > 0 && pinnedHighlightedTabs.length < highlightedTabs.length) {
+      await Promise.all(pinnedHighlightedTabs.map((t) => chrome.tabs.update(t.id, { pinned: false })));
+      // Re-query to refresh labels and indices.
+      highlightedTabs = await chrome.tabs.query({ highlighted: true, lastFocusedWindow: true });
+    }
+
+    let window = await chrome.windows.get(highlightedTabs[0].windowId, { populate: true, windowTypes: ['normal'] });
     if (!window) {
       throw new UserException('Cannot move around tabs in the current window.');
     }
-    let firstUnpinnedIndex = window.tabs.findLastIndex((t) => t.pinned) + 1;
-    let nextIndex;
-    if (currentTab.pinned) {
-      nextIndex = plusMod(currentTab.index, (args.delta || 1), firstUnpinnedIndex);
-    } else {
-      nextIndex = plusMod(currentTab.index - firstUnpinnedIndex, (args.delta || 1), window.tabs.length - firstUnpinnedIndex) + firstUnpinnedIndex;
+
+    // Sort to keep relative order.
+    highlightedTabs.sort((a, b) => a.index - b.index);
+
+    // Identify the "block" of tabs to move.
+    const blockSize = highlightedTabs.length;
+    const indices = highlightedTabs.map((t) => t.index);
+    const isContiguous = (indices[blockSize - 1] - indices[0] + 1 === blockSize);
+    const isBlockPinned = highlightedTabs.every((t) => t.pinned);
+
+    // If the tabs are not contiguous, we bring them together rather than moving them.
+    if (!isContiguous) {
+      if (delta < 0) {
+        // Move left = gather tabs after the first highlighted tabs.
+        await chrome.tabs.move(highlightedTabs.map((t) => t.id), { index: indices[0] });
+        return;
+      }
+      // Move right = gather tabs before the last highlighted tabs.
+      const targetStartIndex = indices[blockSize - 1] - (blockSize - 1);
+      await moveTabsRight(highlightedTabs.map((t) => t.id), targetStartIndex);
+      return;
     }
-    await chrome.tabs.move(currentTab.id, { index: nextIndex });
+
+    // Identify movement area (pinned vs unpinned).
+    const firstUnpinnedIndex = window.tabs.findLastIndex((t) => t.pinned) + 1;
+    const areaOffset = isBlockPinned ? 0 : firstUnpinnedIndex;
+    const areaSize = isBlockPinned ? firstUnpinnedIndex : (window.tabs.length - firstUnpinnedIndex);
+
+    // Use right-most for delta > 0, left-most for delta < 0.
+    const startIndex = indices[0];
+    const nextStartIndex = plusMod(startIndex - areaOffset, delta, areaSize - (blockSize - 1)) + areaOffset;
+    if (nextStartIndex > startIndex) {
+      await moveTabsRight(highlightedTabs.map((t) => t.id), nextStartIndex);
+    } else {
+      await chrome.tabs.move(highlightedTabs.map((t) => t.id), { index: nextStartIndex });
+    }
   },
   'closeTab': async (args) => {
     await closeTab(args.key, args.layerId);
@@ -532,12 +618,61 @@ const server = new Server({
     await closeTabs(args.layerId);
     await cache.flush();
   },
-  'toggleTabPinned': async (args) => {
-    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-    if (!tab) {
-      throw new UserException('There is no active tab to pin.');
+  'highlight': async (args) => {
+    const currentWindow = await chrome.windows.getCurrent({ populate: true, windowTypes: ['normal'] });
+    if (currentWindow == null) {
+      throw new UserException('There is no active window with tabs.');
     }
-    await chrome.tabs.update(tab.id, { pinned: !tab.pinned });
+    let indexes;
+    if (args.variant == 'layer' || args.variant == 'pinned') {
+      let entries;
+      if (args.variant == 'layer') {
+        let layerId;
+        if (args?.layerId != null) {
+          layerId = args.layerId;
+        } else {
+          const state = await cache.getState();
+          layerId = state.getLayerId();
+        }
+        entries = await listPins([layerId]);
+      } else {
+        entries = await listPins();
+      }
+      const tabIds = entries.map(({ pin }) => pin.tabId)
+        .filter((tabId) => tabId != null);
+      const tabs = await Promise.all(tabIds.map((tabId) => chrome.tabs.get(tabId)));
+      indexes = tabs.filter((tab) => tab.windowId == currentWindow.id)
+        .map((tab) => tab.index);
+    } else if (args.variant == 'window') {
+      indexes = currentWindow.tabs.map((tab) => tab.index);
+    } else if (args.variant == 'invert') {
+      indexes = currentWindow.tabs.filter((tab) => !tab.highlighted)
+        .map((tab) => tab.index);
+    } else {
+      throw new Error(`Unknown highlight variant: ${args.variant}`);
+    }
+    if (indexes.length == 0) {
+      throw new UserException('No pins to highlight.');
+    }
+    await chrome.tabs.highlight({ windowId: currentWindow.id, tabs: indexes });
+  },
+  'toggleTabPinned': async (args) => {
+    const highlightedTabs = await chrome.tabs.query({ highlighted: true, lastFocusedWindow: true });
+    if (highlightedTabs.length === 0) {
+      throw new UserException('There are no highlighted tabs to toggle pinned status.');
+    }
+    const activeTab = highlightedTabs.find((t) => t.active) || highlightedTabs[0];
+    const targetPinnedState = !activeTab.pinned;
+
+    // To maintain relative order: Pin tabs left-to-right. Unpin tabs right-to-left.
+    const sortedTabs = [...highlightedTabs].sort((a, b) => a.index - b.index);
+    if (!targetPinnedState) {
+      sortedTabs.reverse();
+    }
+
+    for (const tab of sortedTabs) {
+      await chrome.tabs.update(tab.id, { pinned: targetPinnedState });
+    }
   },
   'closeUnpinnedTabs': async (args) => {
     await closeUnpinnedTabs(args.layerId);
@@ -552,7 +687,7 @@ const server = new Server({
   },
   'listPins': async (args) => {
     const layerIds = args.withoutGlobal ? [args.layerId] : [GLOBAL_LAYER_ID, args.layerId]
-    const entries = await listPins(layerIds);
+    const entries = await listPins(layerIds, { includeHistoryKey: true });
     await cache.flush();
     return entries;
   },
@@ -571,11 +706,11 @@ const server = new Server({
 
 chrome.runtime.onMessage.addListener(server.serve.bind(server));
 
-const comboTrie = function() {
-  const buildAction = function(descriptor) {
-    return async function(parsedArgs) {
+const comboTrie = function () {
+  const buildAction = function (descriptor) {
+    return async function (parsedArgs) {
       const state = await cache.getState();
-      const withDefaultLayerId = function(keyRef) {
+      const withDefaultLayerId = function (keyRef) {
         if (keyRef.layerId == null) {
           return {
             layerId: state.data.layerId,

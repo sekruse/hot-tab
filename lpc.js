@@ -13,7 +13,7 @@ export class UserException {
   }
 
   toString() {
-    return `UserException: ${message}`;
+    return `${this.name}: ${this.message}`;
   }
 }
 
