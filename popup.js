@@ -1,4 +1,5 @@
-import { GLOBAL_LAYER_ID, keysByKeyCode, isModifier, createIcon, parseDigitKeycode } from './keys.js';
+import { GLOBAL_LAYER_ID, keysByKeyCode, isModifier, parseDigitKeycode } from './keys.js';
+import { createIcon } from './ui-utils.js';
 import combos from './combos.js';
 import { Client } from './lpc.js';
 import modal from './modal.js';
