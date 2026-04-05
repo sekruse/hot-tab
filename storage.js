@@ -264,7 +264,7 @@ class Options {
       }, []);
   }
   getKeyOrderIndexedByKeyCode() {
-    return this.getKeyOrder().reduce((acc, val, idx) => acc.set(val, idx), new Map());
+    return this.getKeyOrder().reduce((acc, val, idx) => acc.set(val.keyCode, idx), new Map());
   }
   async flush() {
     if (this.dirty) {

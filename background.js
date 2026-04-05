@@ -87,18 +87,21 @@ async function findNeighborPin(tabId, layerIds, shift) {
   }
   const options = await cache.getOptions();
   let indexByKeyCode = options.getKeyOrderIndexedByKeyCode();
-  entries
+  let finalEntries = entries
     .filter((e) => indexByKeyCode.has(e.keyRef.key))
     .sort((e1, e2) => indexByKeyCode.get(e1.keyRef.key) - indexByKeyCode.get(e2.keyRef.key));
-  let curIndex = entries.findIndex((e) => e.pin.tabId == tabId);
+  if (finalEntries.length == 0) {
+    finalEntries = entries.sort((e1, e2) => e1.keyRef.key.localeCompare(e2.keyRef.key));
+  }
+  let curIndex = finalEntries.findIndex((e) => e.pin.tabId == tabId);
   let nextIndex;
   if (curIndex == -1) {
     nextIndex = (shift >= 0) ? 0 : -1;
   } else {
     nextIndex = curIndex + shift;
   }
-  nextIndex = (nextIndex + entries.length) % entries.length
-  return entries[nextIndex];
+  nextIndex = (nextIndex + finalEntries.length) % finalEntries.length
+  return finalEntries[nextIndex];
 }
 
 /**
