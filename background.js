@@ -330,6 +330,22 @@ function plusMod(n, k, mod) {
   return (n + k + mod) % mod;
 }
 
+/**
+ * Attemps to highlight the given tabs in the given window. Retries if the highlight
+ * hasn't been applied correctly, which has been observed on macOS, presumably due to window animations.
+ */
+async function highlightWithRetry(windowId, indices) {
+  for (let i = 0; i < 3; i++) {
+    await chrome.tabs.highlight({ windowId, tabs: indices });
+    const tabs = await chrome.tabs.query({ windowId });
+    const highlightedIndices = tabs.filter((t) => t.highlighted).map((t) => t.index);
+    if (indices.every((idx) => highlightedIndices.includes(idx))) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, i * 50));
+  }
+}
+
 const server = new Server({
   'getState': async (args) => {
     const state = await cache.getState();
@@ -479,15 +495,27 @@ const server = new Server({
     await cache.flush();
   },
   'moveWindows': async (args) => {
-    const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-    if (!currentTab) {
-      throw new UserException('There is no active tab.');
+    const highlightedTabs = await chrome.tabs.query({ highlighted: true, lastFocusedWindow: true });
+    if (highlightedTabs.length === 0) {
+      throw new UserException('There is no active or highlighted tab.');
     }
+    // Maintain relative order by sorting by index.
+    highlightedTabs.sort((a, b) => a.index - b.index);
+
+    const currentTab = highlightedTabs.find((t) => t.active) || highlightedTabs[0];
+    const tabIds = highlightedTabs.map((t) => t.id);
+
     if (args.createWindow) {
-      await chrome.windows.create({
+      const newWindow = await chrome.windows.create({
         focused: true,
         tabId: currentTab.id,
       });
+      const otherTabIds = tabIds.filter((id) => id !== currentTab.id);
+      if (otherTabIds.length > 0) {
+        let movedTabs = await chrome.tabs.move(otherTabIds, { windowId: newWindow.id, index: -1 });
+        if (!Array.isArray(movedTabs)) movedTabs = [movedTabs];
+        await highlightWithRetry(newWindow.id, [currentTab, ...movedTabs].map((t) => t.index));
+      }
       return;
     }
     let windows = await chrome.windows.getAll({
@@ -504,7 +532,9 @@ const server = new Server({
       throw new UserException('The current tab is not part of a normal window.');
     }
     const nextWindow = windows[plusMod(i, args.delta || 1, windows.length)];
-    await chrome.tabs.move(currentTab.id, { index: -1, windowId: nextWindow.id });
+    let movedTabs = await chrome.tabs.move(tabIds, { index: -1, windowId: nextWindow.id });
+    if (!Array.isArray(movedTabs)) movedTabs = [movedTabs];
+    await highlightWithRetry(nextWindow.id, movedTabs.map((t) => t.index));
     await chrome.tabs.update(currentTab.id, { active: true });
     await chrome.windows.update(nextWindow.id, { focused: true });
   },
