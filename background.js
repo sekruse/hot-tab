@@ -657,11 +657,22 @@ const server = new Server({
     await chrome.tabs.highlight({ windowId: currentWindow.id, tabs: indexes });
   },
   'toggleTabPinned': async (args) => {
-    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-    if (!tab) {
-      throw new UserException('There is no active tab to pin.');
+    const highlightedTabs = await chrome.tabs.query({ highlighted: true, lastFocusedWindow: true });
+    if (highlightedTabs.length === 0) {
+      throw new UserException('There are no highlighted tabs to toggle pinned status.');
     }
-    await chrome.tabs.update(tab.id, { pinned: !tab.pinned });
+    const activeTab = highlightedTabs.find((t) => t.active) || highlightedTabs[0];
+    const targetPinnedState = !activeTab.pinned;
+
+    // To maintain relative order: Pin tabs left-to-right. Unpin tabs right-to-left.
+    const sortedTabs = [...highlightedTabs].sort((a, b) => a.index - b.index);
+    if (!targetPinnedState) {
+      sortedTabs.reverse();
+    }
+
+    for (const tab of sortedTabs) {
+      await chrome.tabs.update(tab.id, { pinned: targetPinnedState });
+    }
   },
   'closeUnpinnedTabs': async (args) => {
     await closeUnpinnedTabs(args.layerId);
