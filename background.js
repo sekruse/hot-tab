@@ -611,11 +611,11 @@ const server = new Server({
 
 chrome.runtime.onMessage.addListener(server.serve.bind(server));
 
-const comboTrie = function() {
-  const buildAction = function(descriptor) {
-    return async function(parsedArgs) {
+const comboTrie = function () {
+  const buildAction = function (descriptor) {
+    return async function (parsedArgs) {
       const state = await cache.getState();
-      const withDefaultLayerId = function(keyRef) {
+      const withDefaultLayerId = function (keyRef) {
         if (keyRef.layerId == null) {
           return {
             layerId: state.data.layerId,
