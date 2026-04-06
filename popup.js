@@ -31,13 +31,8 @@ async function refreshPopup() {
   const layerConfig = await background.getLayerConfig({ layerId, includeFallback: true });
   const nameInput = document.getElementById('layer-name');
   if (document.activeElement !== nameInput) {
-    if (layerConfig.name) {
-      nameInput.value = layerConfig.name;
-      nameInput.classList.remove('layer-name-fallback');
-    } else {
-      nameInput.value = layerConfig.fallbackName;
-      nameInput.classList.add('layer-name-fallback');
-    }
+    nameInput.value = layerConfig.name;
+    nameInput.classList.toggle('layer-name-fallback', layerConfig.nameIsFallback);
   }
 
   document.querySelectorAll('#keyboard [data-keycode]').forEach((key) => {

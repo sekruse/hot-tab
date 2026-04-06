@@ -444,8 +444,10 @@ const server = new Server({
   'getLayerConfig': async (args) => {
     const configs = await cache.getLayerConfigs();
     const config = { ...configs.get(args.layerId) };
+    config.nameIsFallback = false;
     if (args.includeFallback && !config.name) {
-      config.fallbackName = await calculateFallbackLayerName(args.layerId);
+      config.name = await calculateFallbackLayerName(args.layerId);
+      config.nameIsFallback = true;
     }
     return config;
   },
