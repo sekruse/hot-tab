@@ -104,6 +104,30 @@ async function findNeighborPin(tabId, layerIds, shift) {
   return finalEntries[nextIndex];
 }
 
+async function calculateFallbackName(layerId) {
+  const entries = await listPins([layerId]);
+  if (entries.length === 0) {
+    return `Layer ${layerId}`;
+  }
+  const options = await cache.getOptions();
+  const indexByKeyCode = options.getKeyOrderIndexedByKeyCode();
+
+  const sortedPins = entries
+    .filter(e => indexByKeyCode.has(e.keyRef.key))
+    .sort((a, b) => indexByKeyCode.get(a.keyRef.key) - indexByKeyCode.get(b.keyRef.key))
+    .map(e => e.pin.title);
+
+  if (sortedPins.length === 0) {
+    return entries
+      .sort((a, b) => a.keyRef.key.localeCompare(b.keyRef.key))
+      .slice(0, 3)
+      .map(e => e.pin.title)
+      .join(', ');
+  }
+
+  return sortedPins.slice(0, 3).join(', ');
+}
+
 /**
  * Creates a pin object.
  * @param {Object} The tab to pin.

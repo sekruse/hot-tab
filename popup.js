@@ -14,14 +14,32 @@ const background = new Client([
   'clearLayer', 'removePin',
   'updatePin',
   'toggleTabPinned',
+  'getLayerConfig', 'setLayerConfig',
 ]);
 
 // Currently active layer ID.
 let layerId;
 
-async function refreshPinnedTabs() {
+/**
+ * Refreshes the popup UI, including the layer name and the keyboard layout of pinned tabs.
+ * @returns {Promise<void>}
+ */
+async function refreshPopup() {
   const state = await background.getState();
   layerId = state.layerId;
+
+  const layerConfig = await background.getLayerConfig({ layerId, includeFallback: true });
+  const nameInput = document.getElementById('layer-name');
+  if (document.activeElement !== nameInput) {
+    if (layerConfig.name) {
+      nameInput.value = layerConfig.name;
+      nameInput.classList.remove('layer-name-fallback');
+    } else {
+      nameInput.value = layerConfig.fallbackName;
+      nameInput.classList.add('layer-name-fallback');
+    }
+  }
+
   document.querySelectorAll('#keyboard [data-keycode]').forEach((key) => {
     const keyCode = key.getAttribute('data-keycode');
     const digit = parseDigitKeycode(keyCode);
@@ -64,7 +82,7 @@ const comboTrie = function() {
       if (descriptor.closePopup) {
         window.close();
       } else {
-        refreshPinnedTabs();
+        refreshPopup();
       }
     }
   };
@@ -76,7 +94,7 @@ const comboTrie = function() {
       // No need to wait: We have the cached value already updated.
       background.setActiveLayerId({ layerId });
     }
-    await refreshPinnedTabs();
+    await refreshPopup();
     const keyDiv = document.getElementById(`key${keyRef.key}`);
     keyDiv.classList.add('key-glow-blue');
   });
@@ -98,7 +116,7 @@ async function handleDirectInput(keyCode) {
   if (digit.exists) {
     await background.setActiveLayerId({ layerId: digit.value });
     layerId = digit.value;
-    await refreshPinnedTabs();
+    await refreshPopup();
     return;
   }
   if (keyCode === 'Backspace' && event.ctrlKey) {
@@ -112,7 +130,7 @@ async function handleDirectInput(keyCode) {
   } else if (event.altKey) {
     await background.removePin({ key: keyCode, layerId: layerId });
     toast.show(`Pin for ${keyCode} removed.`, 3000);
-    await refreshPinnedTabs();
+    await refreshPopup();
     return;
   } else {
     await background.focusTab({ key: keyCode, layerId: layerId });
@@ -129,8 +147,34 @@ function addInputListeners() {
       await handleDirectInput(keyCode);
     }));
   });
+
+  const nameInput = document.getElementById('layer-name');
+  nameInput.addEventListener('focus', () => {
+    if (nameInput.classList.contains('layer-name-fallback')) {
+       nameInput.value = '';
+       nameInput.classList.remove('layer-name-fallback');
+    }
+  });
+  nameInput.addEventListener('blur', toast.catch(async () => {
+    const config = await background.getLayerConfig({ layerId });
+    const newName = nameInput.value.trim();
+    if (newName !== config.name) {
+      await background.setLayerConfig({ layerId, config: { name: newName } });
+    }
+    await refreshPopup();
+  }));
+  nameInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      nameInput.blur();
+    } else if (event.key === 'Escape') {
+      nameInput.value = ''; // Force refresh in blur
+      nameInput.blur();
+    }
+    event.stopPropagation();
+  });
+
   document.addEventListener('keydown', toast.catch(async (event) => {
-    if (modal.isVisible()) {
+    if (modal.isVisible() || document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') {
       return;
     }
     const commandBar = document.getElementById('command-bar');
@@ -192,7 +236,7 @@ async function saveFromDialog() {
   });
   modal.hide();
   toast.show(`Pin for ${key} updated in layer ${layerId}.`, 3000);
-  refreshPinnedTabs();
+  refreshPopup();
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -202,7 +246,7 @@ document.addEventListener('DOMContentLoaded', () => {
     layerId = state.layerId;
     tooltip.init();
     addInputListeners();
-    await refreshPinnedTabs();
+    await refreshPopup();
     modal.init(toast.catch(saveFromDialog));
   })();
 });
