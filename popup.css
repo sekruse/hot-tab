@@ -1,6 +1,7 @@
 body {
   width: fit-content;
 }
+
 #command-bar {
   position: absolute;
   bottom: 0;
@@ -14,4 +15,31 @@ body {
   box-shadow: 0px 2px 6px 1px #000000;
   color: #000000;
   font-family: monospace;
+}
+
+.layer-name-input {
+  flex: 1;
+  font-size: 1.2rem;
+  font-weight: bold;
+  border: none;
+  background: transparent;
+  padding: 4px 0;
+  color: #333;
+  transition: border-bottom 0.2s;
+  border-bottom: 2px solid transparent;
+}
+
+.layer-name-input:focus {
+  outline: none;
+  border-bottom: 2px solid #000000;
+}
+
+.layer-name-input::placeholder {
+  color: #ccc;
+  font-weight: normal;
+}
+
+.layer-name-fallback {
+  color: #555555;
+  font-weight: normal;
 }
