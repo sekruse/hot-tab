@@ -103,6 +103,9 @@ const comboTrie = function() {
     const { ref: actualRef, pin } = await background.getPin(keyRef);
     showDialog(actualRef.key, actualRef.layerId, pin);
   });
+  trie.addCombo('ln', () => {
+    document.getElementById('layer-name').focus();
+  });
   trie.addCombo(',', () => chrome.runtime.openOptionsPage());
   trie.addCombo('q', () => window.close());
   return trie;
@@ -182,10 +185,12 @@ function addInputListeners() {
       if (event.code === 'Space') {
         // Make the input sequence non-null to start a new input sequence.
         inputSequence = '';
+        event.preventDefault();
       } else if (inputSequence != null) {
         if (isModifier(event.code)) {
           return;
         }
+        event.preventDefault();
         inputSequence += event.key;
         // Hand through input to the direct handler to switch the active layer.
         if (event.code.startsWith('Digit')) {

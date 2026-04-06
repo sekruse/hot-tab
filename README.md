@@ -102,6 +102,7 @@ The table below lists all supported command combos. Squared brackets (`[...]`) d
 | `W` | Move the current tab to the previous window. |
 | `Q` | Move the current tab to a new window. |
 | `e[<layer>]<key>` | Open the edit dialog for the selected key. | Only in the popup window, not for programmable shortcuts. |
+| `ln` | Focus the layer name input field for editing. | Only in the popup window, not for programmable shortcuts. |
 | `,` | Open the options page. | Only in the popup window, not for programmable shortcuts. |
 | `q` | Close the popup. | Only in the popup window, not for programmable shortcuts. |
 
