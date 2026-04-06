@@ -104,7 +104,7 @@ async function findNeighborPin(tabId, layerIds, shift) {
   return finalEntries[nextIndex];
 }
 
-async function calculateFallbackName(layerId) {
+async function calculateFallbackLayerName(layerId) {
   const entries = await listPins([layerId]);
   if (entries.length === 0) {
     return `Layer ${layerId}`;
@@ -112,16 +112,23 @@ async function calculateFallbackName(layerId) {
   const options = await cache.getOptions();
   const indexByKeyCode = options.getKeyOrderIndexedByKeyCode();
 
+  // Many titles are of the form "<name> - <site and other info>" (or similar).
+  // We take only the first part for the layer name.
+  const truncate = (title) => {
+    const map = title.split(/\s+[^\w\s]+\s+/);
+    return map[0].trim();
+  };
+
   const sortedPins = entries
     .filter(e => indexByKeyCode.has(e.keyRef.key))
     .sort((a, b) => indexByKeyCode.get(a.keyRef.key) - indexByKeyCode.get(b.keyRef.key))
-    .map(e => e.pin.title);
+    .map(e => truncate(e.pin.title));
 
   if (sortedPins.length === 0) {
     return entries
       .sort((a, b) => a.keyRef.key.localeCompare(b.keyRef.key))
       .slice(0, 3)
-      .map(e => e.pin.title)
+      .map(e => truncate(e.pin.title))
       .join(', ');
   }
 
@@ -438,7 +445,7 @@ const server = new Server({
     const configs = await cache.getLayerConfigs();
     const config = { ...configs.get(args.layerId) };
     if (args.includeFallback && !config.name) {
-      config.fallbackName = await calculateFallbackName(args.layerId);
+      config.fallbackName = await calculateFallbackLayerName(args.layerId);
     }
     return config;
   },
