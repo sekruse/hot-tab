@@ -410,6 +410,19 @@ const server = new Server({
     options.setKeyOrder(args.inputChars.toUpperCase());
     await cache.flush();
   },
+  'getLayerConfig': async (args) => {
+    const configs = await cache.getLayerConfigs();
+    const config = { ...configs.get(args.layerId) };
+    if (args.includeFallback && !config.name) {
+      config.fallbackName = await calculateFallbackName(args.layerId);
+    }
+    return config;
+  },
+  'setLayerConfig': async (args) => {
+    const configs = await cache.getLayerConfigs();
+    configs.set(args.layerId, args.config);
+    await cache.flush();
+  },
   'pinTab': async (args) => {
     const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
     if (!currentTab) {

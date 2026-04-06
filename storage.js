@@ -46,11 +46,17 @@ const defaultOptions = {
   keyOrder: "ASDFGZXCVB",
 };
 
+const defaultLayerConfigs = LAYER_IDS.reduce((acc, val) => {
+  acc[val] = { name: '' };
+  return acc;
+}, []);
+
 export class Cache {
   constructor() {
     this.state = null;
     this.layers = null;
     this.options = null;
+    this.layerConfigs = null;
     this.pinChangedListeners = [];
     this.layerChangedListeners = [];
   }
@@ -75,6 +81,17 @@ export class Cache {
     }
     return this.options;
   }
+  /**
+   * Loads and returns the layer configurations.
+   * @returns {Promise<LayerConfigs>} The layer configurations.
+   */
+  async getLayerConfigs() {
+    if (this.layerConfigs === null) {
+      const loaded = await chrome.storage.local.get('layerConfigs');
+      this.layerConfigs = new LayerConfigs(loaded.layerConfigs);
+    }
+    return this.layerConfigs;
+  }
   addPinChangedListener(listener) {
     this.pinChangedListeners.push(listener);
   }
@@ -91,6 +108,9 @@ export class Cache {
     }
     if (this.options) {
       p.push(this.options.flush());
+    }
+    if (this.layerConfigs) {
+      p.push(this.layerConfigs.flush());
     }
     await Promise.all(p);
   }
@@ -269,6 +289,49 @@ class Options {
   async flush() {
     if (this.dirty) {
       await chrome.storage.local.set({ 'options': this.data });
+      this.dirty = false;
+    }
+  }
+}
+
+/**
+ * Manages layer-specific configurations.
+ */
+class LayerConfigs {
+  /**
+   * @param {Object[]} data - Initial data for layer configurations.
+   */
+  constructor(data) {
+    this.data = LAYER_IDS.reduce((acc, val) => {
+      acc[val] = { ...defaultLayerConfigs[val], ...data?.[val] };
+      return acc;
+    }, []);
+    this.dirty = false;
+  }
+  /**
+   * Gets the configuration for a specific layer.
+   * @param {number} layerId - The ID of the layer.
+   * @returns {Object} The layer configuration.
+   */
+  get(layerId) {
+    return this.data[layerId];
+  }
+  /**
+   * Updates the configuration for a specific layer. This needs to be called also when the config object has been changed
+   * to persist those changes.
+   * @param {number} layerId - The ID of the layer.
+   * @param {Object} config - The partial configuration to update.
+   */
+  set(layerId, config) {
+    this.data[layerId] = { ...this.data[layerId], ...config };
+    this.dirty = true;
+  }
+  /**
+   * Flushes the current configuration to persistent storage.
+   */
+  async flush() {
+    if (this.dirty) {
+      await chrome.storage.local.set({ 'layerConfigs': this.data });
       this.dirty = false;
     }
   }
