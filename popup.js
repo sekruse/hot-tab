@@ -47,7 +47,7 @@ async function refreshPopup() {
     key.classList.remove('key-glow-blue');
   });
   const entries = await background.listPins({ layerId });
-  entries.forEach(({keyRef, pin}) => {
+  entries.forEach(({ keyRef, pin }) => {
     const keyDiv = document.getElementById(`key${keyRef.key}`);
     if (!keyDiv) {
       throw new Error(`No keyDiv found for ${keyRef.key} / ${JSON.stringify(pin)}`);
@@ -69,9 +69,9 @@ function withDefaultLayerId(keyRef) {
   return keyRef;
 }
 
-const comboTrie = function() {
-  const buildAction = function(descriptor) {
-    return async function(parsedArgs) {
+const comboTrie = function () {
+  const buildAction = function (descriptor) {
+    return async function (parsedArgs) {
       const args = descriptor.argTransformer(parsedArgs, withDefaultLayerId);
       await background[descriptor.method](args);
       if (descriptor.closePopup) {
@@ -149,8 +149,8 @@ function addInputListeners() {
   const nameInput = document.getElementById('layer-name');
   nameInput.addEventListener('focus', () => {
     if (nameInput.classList.contains('layer-name-fallback')) {
-       nameInput.value = '';
-       nameInput.classList.remove('layer-name-fallback');
+      nameInput.value = '';
+      nameInput.classList.remove('layer-name-fallback');
     }
   });
   nameInput.addEventListener('blur', toast.catch(async () => {
@@ -248,6 +248,16 @@ document.addEventListener('DOMContentLoaded', () => {
     addInputListeners();
     await refreshPopup();
     modal.init(toast.catch(saveFromDialog));
+    ['inputTitle', 'inputURL', 'inputURLPattern'].forEach(id => {
+      document.getElementById(id).addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          toast.catch(saveFromDialog)();
+        } else if (event.key === 'Escape') {
+          modal.hide();
+        }
+      });
+    });
   })();
 });
 
