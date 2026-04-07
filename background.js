@@ -21,7 +21,13 @@ async function findTab(pin, keyRef) {
     }
   }
   // Otherwise, try to find a tab that matches the URL pattern.
-  const tabs = await chrome.tabs.query({ url: pin.urlPattern });
+  let tabs = [];
+  try {
+    tabs = await chrome.tabs.query({ url: pin.urlPattern });
+  } catch (error) {
+    console.warn(`Invalid URL pattern for pin "${pin.title}": ${pin.urlPattern}`, error);
+  }
+
   if (tabs.length > 0) {
     const tab = tabs[0];
     pin = {
