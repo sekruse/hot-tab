@@ -4,6 +4,17 @@ import combos from './combos.js';
 import { LAYER_IDS, GLOBAL_LAYER_ID, HISTORY_KEY, keysByKeyCode } from './keys.js';
 const cache = new Cache();
 
+function parseURLPattern(patternString) {
+  try {
+    const url = new URL(patternString);
+    const opts = { protocol: url.protocol, host: url.host, pathname: url.pathname };
+    if (url.search) opts.search = url.search;
+    if (url.hash) opts.hash = url.hash;
+    return new URLPattern(opts);
+  } catch {
+    return new URLPattern(patternString);
+  }
+}
 
 /**
  * Finds the tab linked to the given pin. It might reassociate the pin with a new tab or set the pin as dangling.
@@ -21,11 +32,35 @@ async function findTab(pin, keyRef) {
     }
   }
   // Otherwise, try to find a tab that matches the URL pattern.
-  let tabs = [];
+  let urlPattern;
+  let chromePattern;
   try {
-    tabs = await chrome.tabs.query({ url: pin.urlPattern });
+    urlPattern = parseURLPattern(pin.urlPattern);
+    const url = new URL(pin.urlPattern);
+    const scheme = url.protocol.slice(0, -1);
+    if (url.pathname === '/') {
+      chromePattern = `${scheme}://${url.host}/*`;
+    } else {
+      chromePattern = `${scheme}://${url.host}${url.pathname}`;
+    }
   } catch (error) {
     console.warn(`Invalid URL pattern for pin "${pin.title}": ${pin.urlPattern}`, error);
+  }
+
+  let tabs = [];
+  if (chromePattern) {
+    try {
+      let rawTabs = await chrome.tabs.query({ url: chromePattern });
+      tabs = rawTabs.filter((tab) => {
+        try {
+          return urlPattern.test(tab.url);
+        } catch {
+          return false;
+        }
+      });
+    } catch (error) {
+      console.warn(`chrome.tabs.query failed for pin "${pin.title}": ${chromePattern}`, error);
+    }
   }
 
   if (tabs.length > 0) {
@@ -153,7 +188,7 @@ function createPin(tab, options) {
   if (options?.pinScope === 'origin') {
     urlPattern = `${url.origin}/*`;
   } else {
-    urlPattern = `${url.origin}${url.pathname}`;
+    urlPattern = tab.url;
   }
   let pin = {
     tabId: tab.id,
@@ -519,6 +554,13 @@ const server = new Server({
       dstRef.key = args.updates.key;
     }
     const pin = layers.get(srcRef);
+    if ('urlPattern' in args.updates) {
+      try {
+        parseURLPattern(args.updates.urlPattern);
+      } catch {
+        throw new UserException(`Invalid URL pattern: ${args.updates.urlPattern}`);
+      }
+    }
     ['title', 'url', 'urlPattern'].forEach(p => {
       if (p in args.updates) {
         pin[p] = args.updates[p];
