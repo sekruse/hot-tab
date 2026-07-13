@@ -61,6 +61,7 @@ export class Cache {
     this.layers = null;
     this.options = null;
     this.layerConfigs = null;
+    this.tabHistory = null;
     this.pinChangedListeners = [];
     this.layerChangedListeners = [];
   }
@@ -86,16 +87,23 @@ export class Cache {
     return this.options;
   }
   /**
-   * Loads and returns the layer configurations.
-   * @returns {Promise<LayerConfigs>} The layer configurations.
-   */
-  async getLayerConfigs() {
-    if (this.layerConfigs === null) {
-      const loaded = await chrome.storage.local.get('layerConfigs');
-      this.layerConfigs = new LayerConfigs(loaded.layerConfigs);
-    }
-    return this.layerConfigs;
-  }
+    * Loads and returns the layer configurations.
+    * @returns {Promise<LayerConfigs>} The layer configurations.
+    */
+   async getLayerConfigs() {
+     if (this.layerConfigs === null) {
+       const loaded = await chrome.storage.local.get('layerConfigs');
+       this.layerConfigs = new LayerConfigs(loaded.layerConfigs);
+     }
+     return this.layerConfigs;
+   }
+   async getTabHistory() {
+     if (this.tabHistory === null) {
+       const loaded = await chrome.storage.local.get('tabHistory');
+       this.tabHistory = new TabHistory(loaded.tabHistory, this);
+     }
+     return this.tabHistory;
+   }
   addPinChangedListener(listener) {
     this.pinChangedListeners.push(listener);
   }
@@ -115,6 +123,9 @@ export class Cache {
     }
     if (this.layerConfigs) {
       p.push(this.layerConfigs.flush());
+    }
+    if (this.tabHistory) {
+      p.push(this.tabHistory.flush());
     }
     await Promise.all(p);
   }
@@ -351,13 +362,78 @@ class LayerConfigs {
     this.data[layerId] = { ...this.data[layerId], ...config };
     this.dirty = true;
   }
-  /**
-   * Flushes the current configuration to persistent storage.
-   */
-  async flush() {
-    if (this.dirty) {
-      await chrome.storage.local.set({ 'layerConfigs': this.data });
+ /**
+    * Flushes the current configuration to persistent storage.
+    */
+   async flush() {
+     if (this.dirty) {
+       await chrome.storage.local.set({ 'layerConfigs': this.data });
+       this.dirty = false;
+     }
+   }
+ }
+
+ export const MAX_HISTORY_ENTRIES = 100;
+
+ /**
+  * Manages tab navigation history.
+  */
+ class TabHistory {
+    constructor(data, cache) {
+      this.data = {
+        entries: data?.entries || [],
+      };
+      this.cache = cache;
       this.dirty = false;
     }
+    /**
+     * Finds the index of the entry with the given tabId, or -1 if not found.
+     */
+    findPosition(tabId) {
+      for (let i = 0; i < this.data.entries.length; i++) {
+        if (this.data.entries[i].tabId === tabId) {
+          return i;
+        }
+      }
+      return -1;
+    }
+    push(entry) {
+      this.data.entries.push(entry);
+
+      // Cap size
+      if (this.data.entries.length > MAX_HISTORY_ENTRIES) {
+        this.data.entries.shift();
+      }
+
+      this.dirty = true;
+    }
+    /**
+     * Gets the entry at the given position.
+     */
+    getEntry(position) {
+      if (position < 0 || position >= this.data.entries.length) {
+        return null;
+      }
+      return this.data.entries[position];
+    }
+    /**
+     * Gets the effective position for a tab.
+     * If the tab is not found, assumes end of history.
+     */
+    _effectivePosition(tabId) {
+      const pos = this.findPosition(tabId);
+      return pos >= 0 ? pos : Math.max(0, this.data.entries.length - 1);
+    }
+    canGoBack(tabId) {
+      return this._effectivePosition(tabId) > 0;
+    }
+    canGoForward(tabId) {
+      return this._effectivePosition(tabId) < this.data.entries.length - 1;
+    }
+    async flush() {
+      if (this.dirty) {
+        await chrome.storage.local.set({ 'tabHistory': this.data });
+        this.dirty = false;
+      }
+    }
   }
-}

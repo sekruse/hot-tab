@@ -375,14 +375,30 @@ const defaultComboDescriptors = function() {
     },
   });
   combos.push({
-    sequence: 'cp',
-    descriptor: {
-      method: 'toggleTabPinned',
-      argTransformer: function() { return {}; },
-      closePopup: true,
-    },
-  })
-  return combos;
+     sequence: 'cp',
+     descriptor: {
+       method: 'toggleTabPinned',
+       argTransformer: function() { return {}; },
+       closePopup: true,
+     },
+   });
+   combos.push({
+     sequence: 'hb',
+     descriptor: {
+       method: 'navigateHistory',
+       argTransformer: function() { return { direction: -1, layerId: 0 }; },
+       closePopup: true,
+     },
+   });
+   combos.push({
+     sequence: 'hf',
+     descriptor: {
+       method: 'navigateHistory',
+       argTransformer: function() { return { direction: 1, layerId: 0 }; },
+       closePopup: true,
+     },
+   });
+   return combos;
 }();
 
 function createDefaultComboTrie(buildAction) {

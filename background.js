@@ -1,8 +1,11 @@
 import { Server, UserException } from './lpc.js';
-import { Cache } from './storage.js';
+import { Cache, MAX_HISTORY_ENTRIES } from './storage.js';
 import combos from './combos.js';
-import { LAYER_IDS, GLOBAL_LAYER_ID, HISTORY_KEY, keysByKeyCode } from './keys.js';
+import { LAYER_IDS, GLOBAL_LAYER_ID, keysByKeyCode } from './keys.js';
 const cache = new Cache();
+
+let skipActivationCount = 0;
+let currentHistoryPosition = -1;
 
 function parseURLPattern(patternString) {
   try {
@@ -112,16 +115,15 @@ function applyCaptures(pattern, tabUrl) {
 }
 
 /**
- * Finds the tab linked to the given pin. It might reassociate the pin with a new tab or set the pin as dangling.
- * @param {Object} pin - The pin to work with.
- * @param {Object} keyRef - A reference to the slot the pin is stored at -- so that it can be updated.
- * @returns {Promise<Object>} The updated pin and the tab if any could be found.
+ * Resolves a pin to an actual Chrome tab by tabId or URL pattern.
+ * Does NOT modify any slots or layers. Returns the resolved tab and an updated pin.
  */
-async function findTab(pin, keyRef) {
-  // First, try to retrieve the pinned tab.
+async function resolvePinToTab(pin) {
+  // First, try to retrieve the tab by its stored tabId.
   if (pin.tabId !== undefined) {
     try {
-      return { pin, tab: await chrome.tabs.get(pin.tabId) };
+      const tab = await chrome.tabs.get(pin.tabId);
+      return { tab, pin: createPin(tab) };
     } catch (error) {
       console.log(`Tab for ${pin.title} not found: ${error}`);
     }
@@ -142,40 +144,125 @@ async function findTab(pin, keyRef) {
     console.warn(`Invalid URL pattern for pin "${pin.title}": ${pin.urlPattern}`, error);
   }
 
-  let tabs = [];
-  if (chromePattern) {
-    try {
-      let rawTabs = await chrome.tabs.query({ url: chromePattern });
-      tabs = rawTabs.filter((tab) => {
-        try {
-          return urlPattern.test(tab.url);
-        } catch {
-          return false;
-        }
-      });
-    } catch (error) {
-      console.warn(`chrome.tabs.query failed for pin "${pin.title}": ${chromePattern}`, error);
-    }
+  if (!chromePattern) {
+    return { tab: null, pin };
+  }
+
+  let tabs;
+  try {
+    let rawTabs = await chrome.tabs.query({ url: chromePattern });
+    tabs = rawTabs.filter((tab) => {
+      try {
+        return urlPattern.test(tab.url);
+      } catch {
+        return false;
+      }
+    });
+  } catch (error) {
+    console.warn(`chrome.tabs.query failed for pin "${pin.title}": ${chromePattern}`, error);
   }
 
   if (tabs.length > 0) {
     const tab = tabs[0];
-    pin = {
-      ...createPin(tab),
-      title: pin.title,
-      favIconUrl: pin.favIconUrl,
-      url: pin.url,
-      urlPattern: pin.urlPattern,
+    return {
+      tab,
+      pin: {
+        ...createPin(tab),
+        title: pin.title,
+        favIconUrl: pin.favIconUrl,
+        url: pin.url,
+        urlPattern: pin.urlPattern,
+      },
     };
-    const layers = await cache.getLayers();
-    layers.set(keyRef, pin);
-    return { pin, tab };
   }
-  // If none, mark the pin as dangling.
-  delete pin.tabId;
+  // Tab not found — mark as dangling.
+  return { tab: null, pin: { ...pin } };
+}
+
+/**
+ * Activates (focuses) a tab for the given pin. Creates a new tab if the old one doesn't exist.
+ * Handles resolution, recreation, summon, reset, and focus — all in one place.
+ * Returns the activated tab and the updated pin so the caller can persist it.
+ */
+async function activateTab(pin, options) {
+  const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+
+  // Resolve the pin to an actual tab
+  const { tab: existingTab, pin: resolvedPin } = await resolvePinToTab(pin);
+
+  // Skip the next onActivated event (triggered by our navigation below)
+  if (currentTab && existingTab && existingTab.id !== currentTab.id) {
+    skipActivationCount = 1;
+  }
+
+  let tab = existingTab;
+
+  if (tab == null || options?.recreate) {
+    // We need to create a new tab.
+    // Skip the next onActivated event (triggered by our tab creation below)
+    skipActivationCount = 1;
+    const createOptions = {};
+    if (currentTab) {
+      createOptions.windowId = currentTab.windowId;
+      createOptions.index = currentTab.index + 1;
+    } else {
+      let win;
+      try {
+        win = await chrome.windows.getLastFocused();
+      } catch {
+        win = await chrome.windows.create({ type: 'normal', focused: true });
+      }
+      createOptions.windowId = win.id;
+    }
+    const createdTab = await chrome.tabs.create({ url: resolvedPin.url, ...createOptions });
+    tab = createdTab;
+  }
+
+  if (tab != null) {
+    if (options?.reset) {
+      await chrome.tabs.update(tab.id, { url: resolvedPin.url });
+    }
+    if (options?.summon && currentTab) {
+      if ((currentTab.windowId !== tab.windowId) || (Math.abs(currentTab.index - tab.index) > 1)) {
+        tab = await chrome.tabs.move(tab.id, {
+          index: currentTab.index + 1,
+          windowId: currentTab.windowId,
+        });
+      }
+    }
+
+    // Make sure the tab is in the foreground.
+    if (!tab.active) {
+      tab = await chrome.tabs.update(tab.id, { active: true });
+    }
+    await chrome.windows.update(tab.windowId, { focused: true });
+  }
+
+  // Return the pin that should be persisted (freshly created or resolved)
+  const finalPin = tab ? createPin(tab) : resolvedPin;
+  return { tab, pin: finalPin };
+}
+
+/**
+ * Finds the tab linked to the given pin. Updates the layer slot with the resolved pin.
+ * @param {Object} pin - The pin to work with.
+ * @param {Object} keyRef - A reference to the slot the pin is stored at.
+ * @returns {Promise<Object>} The updated pin and the tab if any could be found.
+ */
+async function findTab(pin, keyRef) {
+  const { tab, pin: resolvedPin } = await resolvePinToTab(pin);
+
+  if (tab) {
+    const layers = await cache.getLayers();
+    layers.set(keyRef, resolvedPin);
+    return { pin: resolvedPin, tab };
+  }
+
+  // Tab not found — mark as dangling.
+  delete resolvedPin.tabId;
   const layers = await cache.getLayers();
-  layers.set(keyRef, pin);
-  return { pin };
+  layers.set(keyRef, resolvedPin);
+  return { pin: resolvedPin };
 }
 
 /**
@@ -188,9 +275,6 @@ async function listPins(layerIds, options) {
   let entries = layerIds
     ? layers.getView(layerIds).listEntries()
     : layers.listAllEntries();
-  if (!options?.includeHistoryKey) {
-    entries = entries.filter(({ keyRef }) => keyRef.key != HISTORY_KEY);
-  }
   return Promise.all(entries.map(async (entry) => {
     const { pin } = await findTab(entry.value, entry.keyRef);
     return { keyRef: entry.keyRef, pin };
@@ -303,6 +387,7 @@ function createPin(tab, options) {
     url: tab.url,
     urlPattern: urlPattern,
     favIconUrl: tab.favIconUrl,
+    windowId: tab.windowId,
   };
   return pin;
 }
@@ -323,67 +408,9 @@ async function focusTab(key, layerId, options) {
   if (!pin) {
     throw new UserException(`There is no pin at ${key} in layer ${layerId}.`);
   }
-  let { tab: pinnedTab } = await findTab(pin, { key, layerId });
-  const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-
-  if (pinnedTab == null || options?.recreate) {
-    // We need to create a new tab.
-    const createOptions = {};
-    if (currentTab) {
-      createOptions.windowId = currentTab.windowId;
-      createOptions.index = currentTab.index + 1;
-    } else {
-      let window;
-      try {
-        window = await chrome.windows.getLastFocused();
-      } catch (anotherError) {
-        // When triggered via shortcuts, there might be no window at all.
-        window = await chrome.windows.create({
-          type: 'normal',
-          focused: true,
-        });
-      }
-      createOptions.windowId = window.id;
-    }
-    pinnedTab = await chrome.tabs.create({
-      url: pin.url,
-      ...createOptions,
-    });
-    pin.tabId = pinnedTab.id;
-    pin.index = pinnedTab.index;
-    layer.set(key, pin);
-  } else {
-    // We need to update an existing tab.
-    if (options?.reset) {
-      await chrome.tabs.update(pinnedTab.id, { url: pin.url });
-    }
-    // If the tab should be "summoned", that means we should move it to the current location.
-    if (options?.summon && currentTab) {
-      if ((currentTab.windowId !== pinnedTab.windowId) || (Math.abs(currentTab.index - pinnedTab.index) > 1)) {
-        pinnedTab = await chrome.tabs.move(pinnedTab.id, {
-          index: currentTab.index + 1,
-          windowId: currentTab.windowId,
-        });
-      }
-    }
-  }
-
-  // Make sure the tab is in the foreground.
-  if (!pinnedTab.active) {
-    pinnedTab = await chrome.tabs.update(pinnedTab.id, { active: true });
-  }
-  await chrome.windows.update(pinnedTab.windowId, { focused: true });
-
-  if (currentTab) {
-    if (currentTab.url === 'chrome://newtab/') {
-      chrome.tabs.remove(currentTab.id);  // fire and forget
-    } else {
-      layers.set({
-        key: HISTORY_KEY,
-        layerId: GLOBAL_LAYER_ID,
-      }, createPin(currentTab));
-    }
-  }
+  const { pin: finalPin } = await activateTab(pin, options);
+  layer.set(key, finalPin);
+  await cache.flush();
 }
 
 async function closeTab(key, layerId) {
@@ -448,7 +475,7 @@ async function refreshBadgeTexts(options) {
   if (options.entries) {
     for (let i = 0; i < options.entries.length; i++) {
       const { keyRef, pin } = options.entries[i];
-      if (pin.tabId == null || keyRef.key == HISTORY_KEY) {
+      if (pin.tabId == null) {
         continue;
       }
       const text = `${keyRef.layerId}${keysByKeyCode.get(keyRef.key).char}`;
@@ -458,7 +485,7 @@ async function refreshBadgeTexts(options) {
   if (options.removedEntries) {
     for (let i = 0; i < options.removedEntries.length; i++) {
       const { keyRef, pin } = options.removedEntries[i];
-      if (pin.tabId == null || keyRef.key == HISTORY_KEY) {
+      if (pin.tabId == null) {
         continue;
       }
       p.push(chrome.action.setBadgeText({ tabId: pin.tabId }));
@@ -493,6 +520,9 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (changeInfo.status != 'complete') {
     return;
   }
+  if (changeInfo.url) {
+    await updateHistoryEntry(tabId, tab.url);
+  }
   const entry = await findPin(tabId, LAYER_IDS);
   if (!entry) {
     return;
@@ -500,6 +530,96 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   await refreshBadgeTexts({ entries: [entry] });
 });
 
+/**
+ * Updates a history entry for a given tabId.
+ * Searches all history entries and updates url/urlPattern/title/favIconUrl.
+ */
+async function updateHistoryEntry(tabId, url) {
+  const history = await cache.getTabHistory();
+  for (let i = 0; i < history.data.entries.length; i++) {
+    if (history.data.entries[i].tabId === tabId) {
+      const entry = history.data.entries[i];
+      entry.url = url;
+      // Derive urlPattern from the URL (same as default pinScope)
+      entry.urlPattern = url;
+      // Update title and favIconUrl if available
+      const tab = await chrome.tabs.get(tabId).catch(() => null);
+      if (tab) {
+        entry.title = tab.title;
+        entry.favIconUrl = tab.favIconUrl;
+      }
+      history.dirty = true;
+      break;
+    }
+  }
+}
+
+/**
+ * Tracks tab navigation via onActivated.
+ */
+chrome.tabs.onActivated.addListener(async ({ tabId, windowId }) => {
+  if (skipActivationCount > 0) {
+    skipActivationCount--;
+    return;
+  }
+
+  const history = await cache.getTabHistory();
+
+  // Deduplicate: skip if this tab is already the last history entry
+  const lastEntry = history.data.entries[history.data.entries.length - 1];
+  if (lastEntry && lastEntry.tabId === tabId) {
+    return;
+  }
+
+  const tab = await chrome.tabs.get(tabId).catch(() => null);
+  if (!tab) {
+    return;
+  }
+
+  await pushToHistory(tab);
+  currentHistoryPosition = history.data.entries.length - 1;
+});
+
+/**
+ * Pushes a tab onto the history stack.
+ * Truncates forward entries based on the current in-memory position.
+ */
+async function pushToHistory(tab) {
+  const history = await cache.getTabHistory();
+
+  // Truncate forward entries at current position
+  if (currentHistoryPosition >= 0 && currentHistoryPosition < history.data.entries.length - 1) {
+    history.data.entries = history.data.entries.slice(0, currentHistoryPosition + 1);
+  }
+
+  history.data.entries.push(createPin(tab));
+
+  // Cap size
+  if (history.data.entries.length > MAX_HISTORY_ENTRIES) {
+    history.data.entries.shift();
+    currentHistoryPosition = Math.max(0, currentHistoryPosition - 1);
+  }
+
+  history.dirty = true;
+  await cache.flush();
+}
+
+/**
+ * Updates history entries when a tab is replaced (resurrected with a new tabId).
+ */
+chrome.tabs.onReplaced.addListener((addedTabId, removedTabId) => {
+  skipActivationCount = 1;
+  cache.getTabHistory().then(history => {
+    for (let i = 0; i < history.data.entries.length; i++) {
+      if (history.data.entries[i].tabId === removedTabId) {
+        history.data.entries[i].tabId = addedTabId;
+        history.dirty = true;
+        break;
+      }
+    }
+    cache.flush();
+  });
+});
 
 /**
  * Calculates (n + k) mod mod.
@@ -717,6 +837,36 @@ const server = new Server({
     await focusTab(entry.keyRef.key, entry.keyRef.layerId, args.options);
     await cache.flush();
   },
+  'navigateHistory': async (args) => {
+    const history = await cache.getTabHistory();
+    const dir = args.direction;  // -1 or +1
+
+    // Determine current position from currentHistoryPosition or derive from active tab
+    let pos = currentHistoryPosition;
+    if (pos === -1) {
+      const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+      if (currentTab) {
+        pos = history.findPosition(currentTab.id);
+      }
+      if (pos === -1) {
+        pos = history.data.entries.length - 1;
+      }
+    }
+
+    const newPos = pos + dir;
+    if (newPos < 0 || newPos >= history.data.entries.length) {
+      throw new UserException('No history entry in that direction.');
+    }
+
+    const entry = history.data.entries[newPos];
+    currentHistoryPosition = newPos;
+
+    // Activate the history entry's tab (reuses the same resolution/creation logic)
+    const { pin: finalPin } = await activateTab(entry, { recreate: false, summon: false });
+    history.data.entries[newPos] = finalPin;
+    history.dirty = true;
+    await cache.flush();
+  },
   'moveWindows': async (args) => {
     const highlightedTabs = await chrome.tabs.query({ highlighted: true, lastFocusedWindow: true });
     if (highlightedTabs.length === 0) {
@@ -913,7 +1063,7 @@ const server = new Server({
   },
   'listPins': async (args) => {
     const layerIds = args.withoutGlobal ? [args.layerId] : [GLOBAL_LAYER_ID, args.layerId]
-    const entries = await listPins(layerIds, { includeHistoryKey: true });
+    const entries = await listPins(layerIds);
     await cache.flush();
     return entries;
   },
@@ -932,11 +1082,11 @@ const server = new Server({
 
 chrome.runtime.onMessage.addListener(server.serve.bind(server));
 
-const comboTrie = function () {
-  const buildAction = function (descriptor) {
-    return async function (parsedArgs) {
+const comboTrie = function() {
+  const buildAction = function(descriptor) {
+    return async function(parsedArgs) {
       const state = await cache.getState();
-      const withDefaultLayerId = function (keyRef) {
+      const withDefaultLayerId = function(keyRef) {
         if (keyRef.layerId == null) {
           return {
             layerId: state.data.layerId,
