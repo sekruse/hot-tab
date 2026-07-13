@@ -122,7 +122,7 @@ async function handleDirectInput(keyCode) {
     return;
   }
   if (event.ctrlKey) {
-    await background.pinTab({ key: keyCode, layerId: layerId, options: { pinScope: 'origin' } });
+    await background.pinTab({ key: keyCode, layerId: layerId, options: { pinScope: 'page' } });
   } else if (event.shiftKey) {
     await background.focusTab({ key: keyCode, layerId: layerId, options: { summon: true } });
   } else if (event.altKey) {

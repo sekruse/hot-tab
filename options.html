@@ -15,6 +15,16 @@
   </section>
 
   <section class="options-card margin-top-double">
+    <h2>URL Patterns</h2>
+    <p class="margin-top-double">URL patterns for pinning with <code>P@</code>. Named captures (e.g., <code>:docid</code>) are filled from the tab URL. Use <code>/*</code> to match the rest of the path, query, and hash. Patterns are matched in order; the first match wins. If no pattern matches, the full URL is used as the pin pattern.</p>
+    <div class="url-patterns-list margin-top-double" id="urlPatternsList"></div>
+    <div class="url-pattern-input margin-top-double">
+      <input id="urlPatternInput" type="text" class="font-monospace" placeholder="https://example.com/:id/*">
+      <button id="addUrlPatternBtn" class="margin-left">Add</button>
+    </div>
+  </section>
+
+  <section class="options-card margin-top-double">
     <h2>Shortcut Actions</h2>
     <p class="margin-top-double">This options page lets you assign command combos to command slots. Before assigning command combos, you'll need to assign shortcuts to however many command slots you'd like to use in Chrome's shortcut menu. You can type in <code>chrome://extensions/shortcuts</code> in the address bar to get to that menu.</p>
     <div class="shortcut-grid margin-top-double" id="shortcutGrid"></div>

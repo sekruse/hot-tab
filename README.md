@@ -67,10 +67,10 @@ The table below lists all supported command combos. Squared brackets (`[...]`) d
 
 | Command | Description | Notes |
 | --- | --- | --- |
-| `p[<layer>]<key>` | Pin the current tab under the given key. The pin's URL pattern will be set to the tab URL's origin (i.e., `protocol://host/*`), so that when the pin becomes detached from its tab, it will bind to any other tab under the same host. | This is the same as `Ctrl`+`<key>` (`⌃<key>` on macOS) in the popup window. |
-| `P[<layer>]<key>` | Pin the current tab under the given key. The pin's URL pattern will be set to the tab URL's origin and path (i.e., `protocol://host/some/path`), so that when the pin becomes detached from its tab, it will bind only to tabs at the very same host and path. | |
-| `;<layer>` | Pin the current tab under the next free key in the specified layer. The pin's URL pattern will be set to the tab URL's origin and path (i.e., `protocol://host/some/path`), so that when the pin becomes detached from its tab, it will bind only to tabs at the very same host and path. | |
-| `;;` | Pin the current tab under the next free key in the current layer. The pin's URL pattern will be set to the tab URL's origin and path (i.e., `protocol://host/some/path`), so that when the pin becomes detached from its tab, it will bind only to tabs at the very same host and path. | |
+| `p[<layer>]<key>` | Pin the current tab under the given key. The pin's URL pattern will use URL matching: configured patterns (e.g., `https://docs.google.com/document/d/:docid/*`) are matched against the tab URL, and named captures are filled into the pin pattern. If no pattern matches, the full tab URL is used. | This is the same as `Ctrl`+`<key>` (`⌃<key>` on macOS) in the popup window. |
+| `P[<layer>]<key>` | Pin the current tab under the given key. The pin's URL pattern will be set to the tab URL's origin (i.e., `protocol://host/*`), so that when the pin becomes detached from its tab, it will bind to any other tab under the same host. | |
+| `;<layer>` | Pin the current tab under the next free key in the specified layer. The pin's URL pattern will use URL matching, same as `p` above. | |
+| `;;` | Pin the current tab under the next free key in the current layer. The pin's URL pattern will use URL matching, same as `p` above. | |
 | `z` | Highlight the key with the currently pinned tab. | Only in the popup window, not for programmable shortcuts. |
 | `g[<layer>]<key>` | Go the pinned tab. | This is the same as pressing only `<key>` in the popup window. |
 | `G[<layer>]<key>` | Bring the pinned tab to the current window and make it the active tab. | This is the same as `Shift`+`<key>` (`⇧<key>` on macOS) in the popup window. |
@@ -111,7 +111,7 @@ The table below lists all supported command combos. Squared brackets (`[...]`) d
 Pins cannot only provide quick access to open tabs, but they can also be useful after a pinned tab has been closed. To understand how this in more detail, it's important to know that a pin has three properties:
 
 * The ID of the pinned tab. If the tab is closed, the ID is deleted from the pin and the pin becomes _detached_.
-* A URL pattern to rebind the pin later. This URL pattern can differ in specificity based on the concrete command used to first create the pin.
+* A URL pattern to rebind the pin later. This URL pattern can differ in specificity based on the concrete command used to first create the pin. When using `p`, configured URL patterns with named captures (e.g., `https://docs.google.com/document/d/:docid/*`) fill in the captured values automatically.
 * A URL. This is typically the URL of the tab when it was first pinned.
 
 Now when you request the tab for a pin, the following simple steps determine what will happen:
@@ -120,4 +120,4 @@ Now when you request the tab for a pin, the following simple steps determine wha
 * If the tab is detached, find any other tab whose URL matches the pin's URL pattern. If there is such a tab, that's your tab. The pin is attached to the tab, so you'll get that same tab next time you fetch the pin – even if the tab is no longer matching the pin's URL pattern at that point.
 * However, if there's no matching tab for the detached pin, a new tab will be created with the pin's URL. The pin is attached to the new tab.
 
-Long story short, the above steps are designed so that in most cases you will get you a useful tab when selecting a pin while avoiding to create duplicate pins – Hot Tab should help manage the tab chaos, not add to it. However, for this to work, it's important to set your pins' URLs and URL patterns properly (cf. `p` vs. `P` command). For long-lived pins (e.g., those on the global layer), you might want to edit the URLs and URL patterns manually (cf. `e` command), so that the pins properly reattach to their designated tabs after, e.g., a browser restart.
+Long story short, the above steps are designed so that in most cases you will get you a useful tab when selecting a pin while avoiding to create duplicate pins – Hot Tab should help manage the tab chaos, not add to it. However, for this to work, it's important to set your pins' URLs and URL patterns properly (use `p` for context-aware patterns, `P` for host-only). For long-lived pins (e.g., those on the global layer), you might want to edit the URLs and URL patterns manually (cf. `e` command), so that the pins properly reattach to their designated tabs after, e.g., a browser restart.

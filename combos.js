@@ -339,7 +339,7 @@ const defaultComboDescriptors = function() {
     descriptor: {
       method: 'pinTab',
       argTransformer: function([keyRef], withDefaultLayerId) {
-        return { ...withDefaultLayerId(keyRef), options: { pinScope: 'origin' } };
+        return { ...withDefaultLayerId(keyRef), options: { pinScope: 'page' } };
       },
       closePopup: true,
     },
@@ -349,7 +349,7 @@ const defaultComboDescriptors = function() {
     descriptor: {
       method: 'pinTab',
       argTransformer: function([keyRef], withDefaultLayerId) {
-        return { ...withDefaultLayerId(keyRef), options: { pinScope: 'page' } };
+        return { ...withDefaultLayerId(keyRef), options: { pinScope: 'origin' } };
       },
       closePopup: true,
     },

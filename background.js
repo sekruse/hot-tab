@@ -16,6 +16,101 @@ function parseURLPattern(patternString) {
   }
 }
 
+function normalizeUrlPattern(pattern) {
+  let normalized = pattern;
+  normalized = normalized.replace(/\*\*/g, '*');
+  if (!normalized.match(/^[\w+.-]+:/)) {
+    normalized = 'https://' + normalized;
+  }
+  try {
+    const url = new URL(normalized);
+    if (!normalized.includes('*') && (url.pathname === '/' || url.pathname === '')) {
+      normalized += '/*';
+    }
+  } catch {
+    // Can't parse, return as-is
+  }
+  return normalized;
+}
+
+function findMatchingPattern(patterns, tabUrl) {
+  for (let i = 0; i < patterns.length; i++) {
+    try {
+      const urlPattern = new URLPattern(normalizeUrlPattern(patterns[i]));
+      if (urlPattern.test(tabUrl)) {
+        return patterns[i];
+      }
+    } catch {
+      // Skip invalid patterns
+    }
+  }
+  return null;
+}
+
+function applyCaptures(pattern, tabUrl) {
+  try {
+    const urlPattern = new URLPattern(normalizeUrlPattern(pattern));
+    const result = urlPattern.exec(tabUrl);
+    if (!result) return null;
+
+    // Build a map of all named groups across pathname, search, hash, etc.
+    const allGroups = {};
+    for (const key of Object.keys(result.pathname.groups || {})) {
+      allGroups[key] = result.pathname.groups[key];
+    }
+    for (const key of Object.keys(result.search?.groups || {})) {
+      allGroups[key] = result.search.groups[key];
+    }
+    for (const key of Object.keys(result.hash?.groups || {})) {
+      allGroups[key] = result.hash.groups[key];
+    }
+
+    // Walk the pattern string and replace :name captures with their matched values.
+    // URLPattern uses :name for named groups in the pathname.
+    // We need to handle them in path segments like /:docid/*
+    let filled = '';
+    let i = 0;
+    while (i < pattern.length) {
+      if (pattern[i] === ':' && i + 1 < pattern.length && pattern[i + 1] !== '*') {
+        // Potential named capture
+        let nameEnd = i + 1;
+        while (nameEnd < pattern.length && /[a-zA-Z0-9_]/.test(pattern[nameEnd])) {
+          nameEnd++;
+        }
+        const name = pattern.slice(i + 1, nameEnd);
+        if (name in allGroups) {
+          filled += '/' + allGroups[name];
+        } else {
+          filled += pattern.slice(i, nameEnd);
+        }
+        i = nameEnd;
+      } else if (pattern[i] === '*') {
+        // Single wildcard - keep as-is (will match everything remaining)
+        filled += '*';
+        i++;
+      } else {
+        filled += pattern[i];
+        i++;
+      }
+    }
+
+    // If the filled pattern doesn't contain any wildcards and ends without a wildcard,
+    // append /* to match query/hash
+    if (!filled.includes('*')) {
+      // Check if there was originally a trailing wildcard
+      const trimmedPattern = pattern.replace(/^https?:\/\//, '');
+      if (trimmedPattern.match(/\/\*$/)) {
+        filled += '/*';
+      }
+    }
+
+    return filled;
+  } catch (e) {
+    console.warn('Failed to apply captures for pattern "' + pattern + '":', e);
+    return null;
+  }
+}
+
 /**
  * Finds the tab linked to the given pin. It might reassociate the pin with a new tab or set the pin as dangling.
  * @param {Object} pin - The pin to work with.
@@ -179,7 +274,9 @@ async function calculateFallbackLayerName(layerId) {
 /**
  * Creates a pin object.
  * @param {Object} The tab to pin.
- * @param {string} options.pinScope - "origin" or "page", depending on which URL pattern the pin should bind to
+ * @param {Object} options - Pin options.
+ * @param {string} options.pinScope - "origin" or "page".
+ * @param {string[]} [options.urlPatterns] - URL patterns to match against.
  * @returns {Object} The pin.
  */
 function createPin(tab, options) {
@@ -187,6 +284,15 @@ function createPin(tab, options) {
   let urlPattern;
   if (options?.pinScope === 'origin') {
     urlPattern = `${url.origin}/*`;
+  } else if (options?.pinScope === 'page') {
+    const patterns = options.urlPatterns || [];
+    const matchedPattern = findMatchingPattern(patterns, tab.url);
+    if (matchedPattern) {
+      const filled = applyCaptures(matchedPattern, tab.url);
+      urlPattern = filled || tab.url;
+    } else {
+      urlPattern = tab.url;
+    }
   } else {
     urlPattern = tab.url;
   }
@@ -519,10 +625,10 @@ const server = new Server({
       }
     }
     const layers = await cache.getLayers();
+    const options = await cache.getOptions();
     const layer = layers.getView([GLOBAL_LAYER_ID, args.layerId]);
     let key = args.key;
     if (!key) {
-      const options = await cache.getOptions();
       const keyOrder = options.getKeyOrder();
       for (let i = 0; i < keyOrder.length; i++) {
         const nextKey = keyOrder[i];
@@ -535,7 +641,14 @@ const server = new Server({
     if (!key) {
       throw new UserException('There is no more free key slot among the default keys.');
     }
-    const pin = createPin(currentTab, args.options);
+    const pinOptions = {
+      pinScope: args.options?.pinScope,
+      urlPatterns: options.getUrlPatterns(),
+    };
+    if (args.options?.dupeScope) {
+      pinOptions.dupeScope = args.options.dupeScope;
+    }
+    const pin = createPin(currentTab, pinOptions);
     const layerId = layer.set(key, pin);
     await cache.flush();
     return { layerId };
@@ -767,6 +880,25 @@ const server = new Server({
     for (const tab of sortedTabs) {
       await chrome.tabs.update(tab.id, { pinned: targetPinnedState });
     }
+  },
+  'listUrlPatterns': async (args) => {
+    const options = await cache.getOptions();
+    return options.getUrlPatterns();
+  },
+  'addUrlPattern': async (args) => {
+    const options = await cache.getOptions();
+    try {
+      new URLPattern(normalizeUrlPattern(args.pattern));
+    } catch {
+      throw new UserException(`Invalid URL pattern: ${args.pattern}`);
+    }
+    options.addUrlPattern(args.pattern);
+    await cache.flush();
+  },
+  'removeUrlPattern': async (args) => {
+    const options = await cache.getOptions();
+    options.removeUrlPattern(args.index);
+    await cache.flush();
   },
   'closeUnpinnedTabs': async (args) => {
     await closeUnpinnedTabs(args.layerId);

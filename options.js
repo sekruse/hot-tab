@@ -4,6 +4,7 @@ import toast from './toast.js';
 const background = new Client([
   'listCommandCombos', 'setCommandCombo',
   'getKeyOrder', 'setKeyOrder',
+  'listUrlPatterns', 'addUrlPattern', 'removeUrlPattern',
 ]);
 
 async function refreshKeyOrder() {
@@ -57,12 +58,63 @@ async function refreshShortcuts() {
     });
 }
 
+async function refreshUrlPatterns() {
+  const list = document.getElementById('urlPatternsList');
+  list.innerHTML = '';
+  const patterns = await background.listUrlPatterns();
+  if (patterns.length === 0) {
+    const emptyMsg = document.createElement('p');
+    emptyMsg.classList.add('margin-bottom');
+    emptyMsg.innerText = 'No URL patterns configured. Add one below to pin tabs with dynamic paths.';
+    list.appendChild(emptyMsg);
+    return;
+  }
+  patterns.forEach((pattern, index) => {
+    const item = document.createElement('div');
+    item.classList.add('url-pattern-item');
+    const span = document.createElement('span');
+    span.innerText = pattern;
+    item.appendChild(span);
+    const removeBtn = document.createElement('button');
+    removeBtn.classList.add('url-pattern-remove');
+    removeBtn.innerText = '\u00D7';
+    removeBtn.title = 'Remove pattern';
+    removeBtn.addEventListener('click', toast.catch(async () => {
+      await background.removeUrlPattern({ index });
+      await refreshUrlPatterns();
+    }));
+    item.appendChild(removeBtn);
+    list.appendChild(item);
+  });
+}
+
 document.addEventListener('DOMContentLoaded', toast.catch(async () => {
   await refreshKeyOrder();
   await refreshShortcuts();
+  await refreshUrlPatterns();
+
   const orderInput = document.getElementById('orderInput');
   orderInput.addEventListener('input', toast.catch(async (event) => {
     await background.setKeyOrder({ inputChars: event.target.value });
     await refreshKeyOrder();
+  }));
+
+  const urlPatternInput = document.getElementById('urlPatternInput');
+  const addUrlPatternBtn = document.getElementById('addUrlPatternBtn');
+  addUrlPatternBtn.addEventListener('click', toast.catch(async () => {
+    const pattern = urlPatternInput.value.trim();
+    if (!pattern) return;
+    await background.addUrlPattern({ pattern });
+    urlPatternInput.value = '';
+    await refreshUrlPatterns();
+  }));
+  urlPatternInput.addEventListener('keydown', toast.catch(async (event) => {
+    if (event.key === 'Enter') {
+      const pattern = urlPatternInput.value.trim();
+      if (!pattern) return;
+      await background.addUrlPattern({ pattern });
+      urlPatternInput.value = '';
+      await refreshUrlPatterns();
+    }
   }));
 }));
