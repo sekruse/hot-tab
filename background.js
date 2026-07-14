@@ -837,23 +837,33 @@ const server = new Server({
     await focusTab(entry.keyRef.key, entry.keyRef.layerId, args.options);
     await cache.flush();
   },
+  'getTabHistory': async () => {
+    const history = await cache.getTabHistory();
+    return history.data.entries.map((entry) => ({ ...entry }));
+  },
   'navigateHistory': async (args) => {
     const history = await cache.getTabHistory();
-    const dir = args.direction;  // -1 or +1
+    let newPos;
+    if (args.index !== undefined) {
+      newPos = args.index;
+    } else {
+      const dir = args.direction;  // -1 or +1
 
-    // Determine current position from currentHistoryPosition or derive from active tab
-    let pos = currentHistoryPosition;
-    if (pos === -1) {
-      const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-      if (currentTab) {
-        pos = history.findPosition(currentTab.id);
-      }
+      // Determine current position from currentHistoryPosition or derive from active tab
+      let pos = currentHistoryPosition;
       if (pos === -1) {
-        pos = history.data.entries.length - 1;
+        const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+        if (currentTab) {
+          pos = history.findPosition(currentTab.id);
+        }
+        if (pos === -1) {
+          pos = history.data.entries.length - 1;
+        }
       }
+
+      newPos = pos + dir;
     }
 
-    const newPos = pos + dir;
     if (newPos < 0 || newPos >= history.data.entries.length) {
       throw new UserException('No history entry in that direction.');
     }
@@ -1074,9 +1084,9 @@ const server = new Server({
     }
     const entry = await findPin(currentTab.id, LAYER_IDS);
     if (!entry) {
-      throw new UserException(`No pin found for current tab "${currentTab.title}" (${currentTab.url}).`);
+      return { keyRef: undefined, tabId: currentTab.id };
     }
-    return entry.keyRef;
+    return { keyRef: entry.keyRef, tabId: currentTab.id };
   },
 });
 

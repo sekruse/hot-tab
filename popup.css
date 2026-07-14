@@ -43,3 +43,73 @@ body {
   color: #555555;
   font-weight: normal;
 }
+
+.history-list {
+  max-height: 180px;
+  overflow-y: auto;
+  border: 1px solid #c0c0c0;
+  border-radius: 4px;
+  background-color: #f8f8f8;
+  padding: 4px;
+  margin-top: 2px;
+}
+
+.history-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.history-list::-webkit-scrollbar-track {
+  background: #e0e0e0;
+  border-radius: 4px;
+}
+
+.history-list::-webkit-scrollbar-thumb {
+  background: #a0a0a0;
+  border-radius: 4px;
+}
+
+.history-list::-webkit-scrollbar-thumb:hover {
+  background: #808080;
+}
+
+.history-label {
+  font-size: 8pt;
+  color: #888;
+}
+
+.history-item {
+  display: flex;
+  flex-flow: row nowrap;
+  align-items: center;
+  padding: 3px 5px;
+  margin-bottom: 2px;
+  border-radius: 3px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 9pt;
+}
+
+.history-item:hover {
+  background-color: #e0e0e0;
+}
+
+.history-item-current {
+  background-color: #d0e8ff;
+  font-weight: bold;
+}
+
+.history-item-current:hover {
+  background-color: #b0d4f0;
+}
+
+.history-item .icon {
+  margin-right: 5px;
+  margin-left: 0;
+}
+
+.history-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

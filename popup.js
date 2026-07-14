@@ -15,7 +15,7 @@ const background = new Client([
   'updatePin',
   'toggleTabPinned',
   'getLayerConfig', 'setLayerConfig',
-  'navigateHistory',
+  'navigateHistory', 'getTabHistory',
 ]);
 
 // Currently active layer ID.
@@ -47,8 +47,8 @@ async function refreshPopup() {
     }
     key.classList.remove('key-glow-blue');
   });
-  const entries = await background.listPins({ layerId });
-  entries.forEach(({ keyRef, pin }) => {
+  const pins = await background.listPins({ layerId });
+  pins.forEach(({ keyRef, pin }) => {
     const keyDiv = document.getElementById(`key${keyRef.key}`);
     if (!keyDiv) {
       throw new Error(`No keyDiv found for ${keyRef.key} / ${JSON.stringify(pin)}`);
@@ -56,6 +56,36 @@ async function refreshPopup() {
     keyDiv.setAttribute('data-tooltip', pin.title);
     keyDiv.replaceChildren(createIcon(pin));
   });
+
+  const historyList = document.getElementById('history-list');
+  const historyEntries = await background.getTabHistory();
+  const { tabId: currentTabId } = await background.getActiveKey();
+  historyList.innerHTML = '';
+  if (historyEntries.length === 0) {
+    return;
+  }
+  const entries = historyEntries.slice().reverse();
+  for (let i = 0; i < entries.length; i++) {
+    const pin = entries[i];
+    const origIndex = historyEntries.length - 1 - i;
+    const item = document.createElement('div');
+    item.className = 'history-item';
+    item.setAttribute('data-tooltip', pin.title);
+    if (pin.tabId === currentTabId) {
+      item.classList.add('history-item-current');
+    }
+    const icon = createIcon(pin);
+    item.appendChild(icon);
+    const title = document.createElement('span');
+    title.className = 'history-title';
+    title.textContent = pin.title.length > 25 ? pin.title.slice(0, 25) + '…' : pin.title;
+    item.appendChild(title);
+    item.addEventListener('click', toast.catch(async () => {
+      await background.navigateHistory({ index: origIndex });
+      window.close();
+    }));
+    historyList.appendChild(item);
+  }
 }
 
 // Input handling
@@ -84,7 +114,10 @@ const comboTrie = function () {
   };
   const trie = combos.createDefaultTrie(buildAction);
   trie.addCombo('z', async () => {
-    const keyRef = await background.getActiveKey();
+    const { keyRef } = await background.getActiveKey();
+    if (!keyRef) {
+      throw new Error('Current tab is not pinned.');
+    }
     if (keyRef.layerId !== GLOBAL_LAYER_ID) {
       layerId = keyRef.layerId;
       // No need to wait: We have the cached value already updated.
