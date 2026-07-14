@@ -383,7 +383,7 @@ const defaultComboDescriptors = function() {
      },
    });
    combos.push({
-     sequence: 'hb',
+     sequence: '[',
      descriptor: {
        method: 'navigateHistory',
        argTransformer: function() { return { direction: -1, layerId: 0 }; },
@@ -391,7 +391,7 @@ const defaultComboDescriptors = function() {
      },
    });
    combos.push({
-     sequence: 'hf',
+     sequence: ']',
      descriptor: {
        method: 'navigateHistory',
        argTransformer: function() { return { direction: 1, layerId: 0 }; },
