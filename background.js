@@ -493,7 +493,6 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 
 // Tracks tab navigation via onActivated.
 chrome.tabs.onActivated.addListener(async ({ tabId, windowId }) => {
-  console.log(`Tab activation: ${tabId}`);
   // Don't update the history when asked to. Clear the toggle, because the skipping has been done.
   if (skipUpdateHistory) {
     skipUpdateHistory = false;
@@ -510,7 +509,6 @@ chrome.tabs.onActivated.addListener(async ({ tabId, windowId }) => {
 
   // Update and flush the history.
   history.push(createPin(tab, { pinScope: 'page' }));
-  logTabHistory(history);
   await cache.flush();
 });
 
@@ -523,14 +521,8 @@ chrome.tabs.onReplaced.addListener(async (addedTabId, removedTabId) => {
       return { ...e, tabId: removedTabId };
     }
   });
-  logTabHistory(history);
   await cache.flush();
 });
-
-function logTabHistory(history) {
-  console.log(`Tab history: 
-${history.data.entries.map(e => e.url).join('\n')}`)
-}
 
 // Updates the history when a tab has changed.
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
@@ -542,7 +534,6 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
       return newPin;
     }
   });
-  logTabHistory(history);
   await cache.flush();
 });
 
@@ -794,7 +785,6 @@ const server = new Server({
     const entry = history.getEntry(newPos);
     const { pin: finalPin } = await activateTab(entry, { recreate: false, summon: false, skipUpdateHistory: true });
     history.setEntry(newPos, finalPin);
-    logTabHistory(history);
     await cache.flush();
   },
   'clearHistory': async () => {
