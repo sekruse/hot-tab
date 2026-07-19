@@ -8,24 +8,18 @@ const cache = new Cache();
 // Because it seems essentially impossible that the service worker is preempted in between those two events, we don't track this value as state.
 let skipUpdateHistory = false;
 
-function parseURLPattern(patternString) {
-  try {
-    const url = new URL(patternString);
-    const opts = { protocol: url.protocol, host: url.host, pathname: url.pathname };
-    if (url.search) opts.search = url.search;
-    if (url.hash) opts.hash = url.hash;
-    return new URLPattern(opts);
-  } catch {
-    return new URLPattern(patternString);
-  }
-}
-
-function findMatchingPattern(patterns, tabUrl) {
-  for (let i = 0; i < patterns.length; i++) {
+/**
+ * Finds which meta pattern matches the given URL.
+ */
+function applyMetaPatterns(metaPatterns, url) {
+  let matchingMetaPattern;
+  for (let i = 0; i < metaPatterns.length; i++) {
+    const metaPattern = metaPatterns[i];
     try {
-      const urlPattern = new URLPattern(patterns[i]);
-      if (urlPattern.test(tabUrl)) {
-        return patterns[i];
+      const mp = new URLPattern(metaPattern);
+      const match = mp.exec(url);
+      if (match) {
+        return instantiateMetaPattern(metaPattern, match, url);
       }
     } catch {
       // Skip invalid patterns
@@ -34,75 +28,80 @@ function findMatchingPattern(patterns, tabUrl) {
   return null;
 }
 
-function applyCaptures(pattern, tabUrl) {
-  try {
-    const urlPattern = new URLPattern(pattern);
-    const result = urlPattern.exec(tabUrl);
-    if (!result) return null;
-
-    // Build a map of all named groups across pathname, search, hash, etc.
-    const allGroups = {};
-    for (const key of Object.keys(result.pathname.groups || {})) {
-      allGroups[key] = result.pathname.groups[key];
-    }
-    for (const key of Object.keys(result.search?.groups || {})) {
-      allGroups[key] = result.search.groups[key];
-    }
-    for (const key of Object.keys(result.hash?.groups || {})) {
-      allGroups[key] = result.hash.groups[key];
-    }
-
-    // Walk the pattern string and replace :name captures with their matched values.
-    // URLPattern uses :name for named groups in the pathname.
-    // We need to handle them in path segments like /:docid/*
-    let filled = '';
-    let i = 0;
-    while (i < pattern.length) {
-      if (pattern[i] === ':' && i + 1 < pattern.length && pattern[i + 1] !== '*') {
-        // Potential named capture
-        let nameEnd = i + 1;
-        while (nameEnd < pattern.length && /[a-zA-Z0-9_]/.test(pattern[nameEnd])) {
-          nameEnd++;
-        }
-        const name = pattern.slice(i + 1, nameEnd);
-        if (name in allGroups) {
-          filled += '/' + allGroups[name];
-        } else {
-          filled += pattern.slice(i, nameEnd);
-        }
-        i = nameEnd;
-      } else if (pattern[i] === '*') {
-        // Single wildcard - keep as-is (will match everything remaining)
-        filled += '*';
-        i++;
-      } else {
-        filled += pattern[i];
-        i++;
-      }
-    }
-
-    // If the filled pattern doesn't contain any wildcards and ends without a wildcard,
-    // append /* to match query/hash
-    if (!filled.includes('*')) {
-      // Check if there was originally a trailing wildcard
-      const trimmedPattern = pattern.replace(/^https?:\/\//, '');
-      if (trimmedPattern.match(/\/\*$/)) {
-        filled += '/*';
-      }
-    }
-
-    return filled;
-  } catch (e) {
-    console.warn('Failed to apply captures for pattern "' + pattern + '":', e);
-    return null;
+/**
+ * Turns a meta pattern into a URL pattern based on a match.
+ */
+function instantiateMetaPattern(metaPattern, match, url) {
+  // Build a map of all named groups across pathname, search, hash, etc.
+  const allGroups = {};
+  for (const key of Object.keys(match.pathname.groups || {})) {
+    allGroups[key] = match.pathname.groups[key];
   }
+  for (const key of Object.keys(match.search?.groups || {})) {
+    allGroups[key] = match.search.groups[key];
+  }
+  for (const key of Object.keys(match.hash?.groups || {})) {
+    allGroups[key] = match.hash.groups[key];
+  }
+
+  // Walk the pattern string and replace :name captures with their matched values.
+  // URLPattern uses :name for named groups in the pathname.
+  // We need to handle them in path segments like /:docid/*
+  let filled = '';
+  let i = 0;
+  while (i < metaPattern.length) {
+    if (metaPattern[i] === ':' && i + 1 < metaPattern.length && metaPattern[i + 1] !== '*') {
+      // Potential named capture
+      let nameEnd = i + 1;
+      while (nameEnd < metaPattern.length && /[a-zA-Z0-9_]/.test(metaPattern[nameEnd])) {
+        nameEnd++;
+      }
+      const name = metaPattern.slice(i + 1, nameEnd);
+      if (name in allGroups) {
+        filled += '/' + allGroups[name];
+      } else {
+        filled += metaPattern.slice(i, nameEnd);
+      }
+      i = nameEnd;
+    } else if (metaPattern[i] === '*') {
+      // Single wildcard - keep as-is (will match everything remaining)
+      filled += '*';
+      i++;
+    } else {
+      filled += metaPattern[i];
+      i++;
+    }
+  }
+
+  // If the filled pattern doesn't contain any wildcards and ends without a wildcard,
+  // append /* to match query/hash
+  if (!filled.includes('*')) {
+    // Check if there was originally a trailing wildcard
+    const trimmedPattern = metaPattern.replace(/^https?:\/\//, '');
+    if (trimmedPattern.match(/\/\*$/)) {
+      filled += '/*';
+    }
+  }
+
+  return filled;
+}
+
+
+/**
+ * Turns a URL string into a URL pattern string that matches only that origin and path.
+ */
+function urlToPatternString(url) {
+  const u = new URL(url);
+  u.hash = '';
+  u.search = '';
+  return u.toString();
 }
 
 /**
  * Resolves a pin to an actual Chrome tab by tabId or URL pattern.
  * Does NOT modify any slots or layers. Returns the resolved tab and an updated pin.
  */
-async function resolvePinToTab(pin) {
+async function resolvePinToTab(pin, keyRef) {
   // First, try to retrieve the tab by its stored tabId.
   if (pin.tabId !== undefined) {
     try {
@@ -114,37 +113,22 @@ async function resolvePinToTab(pin) {
   }
   // Otherwise, try to find a tab that matches the URL pattern.
   let urlPattern;
-  let chromePattern;
   try {
-    urlPattern = parseURLPattern(pin.urlPattern);
-    const url = new URL(pin.urlPattern);
-    const scheme = url.protocol.slice(0, -1);
-    if (url.pathname === '/') {
-      chromePattern = `${scheme}://${url.host}/*`;
-    } else {
-      chromePattern = `${scheme}://${url.host}${url.pathname}`;
+    urlPattern = new URLPattern(pin.urlPattern);
+  } catch (e) {
+    console.warn(`Bad URL pattern for ${keyRef ? JSON.stringify(keyRef) : "n/a"}: "${pin.urlPattern}"`, e);
+    // Degrade gracefully, mark the pin as dangling.
+    return { tab: null, pin: { ...pin } };
+  }
+
+  let tabs = await chrome.tabs.query({});
+  tabs = tabs.filter((tab) => {
+    try {
+      return urlPattern.test(tab.url);
+    } catch {
+      return false;
     }
-  } catch (error) {
-    console.warn(`Invalid URL pattern for pin "${pin.title}": ${pin.urlPattern}`, error);
-  }
-
-  if (!chromePattern) {
-    return { tab: null, pin };
-  }
-
-  let tabs;
-  try {
-    let rawTabs = await chrome.tabs.query({ url: chromePattern });
-    tabs = rawTabs.filter((tab) => {
-      try {
-        return urlPattern.test(tab.url);
-      } catch {
-        return false;
-      }
-    });
-  } catch (error) {
-    console.warn(`chrome.tabs.query failed for pin "${pin.title}": ${chromePattern}`, error);
-  }
+  });
 
   if (tabs.length > 0) {
     const tab = tabs[0];
@@ -229,7 +213,7 @@ async function activateTab(pin, options) {
  * @returns {Promise<Object>} The updated pin and the tab if any could be found.
  */
 async function findTab(pin, keyRef) {
-  const { tab, pin: resolvedPin } = await resolvePinToTab(pin);
+  const { tab, pin: resolvedPin } = await resolvePinToTab(pin, keyRef);
 
   if (tab) {
     const layers = await cache.getLayers();
@@ -339,7 +323,7 @@ async function calculateFallbackLayerName(layerId) {
  * @param {Object} The tab to pin.
  * @param {Object} options - Pin options.
  * @param {string} options.pinScope - "origin" or "page".
- * @param {string[]} [options.urlPatterns] - URL patterns to match against.
+ * @param {string[]} [options.metaPatterns] - URL patterns to match against.
  * @returns {Object} The pin.
  */
 function createPin(tab, options) {
@@ -354,16 +338,11 @@ function createPin(tab, options) {
   if (options?.pinScope === 'origin') {
     urlPattern = `${url.origin}/*`;
   } else if (options?.pinScope === 'page') {
-    const patterns = options.urlPatterns || [];
-    const matchedPattern = findMatchingPattern(patterns, tab.url);
-    if (matchedPattern) {
-      const filled = applyCaptures(matchedPattern, tab.url);
-      urlPattern = filled || tab.url;
-    } else {
-      urlPattern = tab.url;
-    }
-  } else {
-    urlPattern = tab.url;
+    const metaPatterns = options.metaPatterns || [];
+    let urlPattern = applyMetaPatterns(metaPatterns, tab.url);
+  }
+  if (!urlPattern) {
+    urlPattern = urlToPatternString(url);
   }
   let pin = {
     tabId: tab.id,
@@ -709,7 +688,7 @@ const server = new Server({
     }
     const pinOptions = {
       pinScope: args.options?.pinScope,
-      urlPatterns: options.getUrlPatterns(),
+      metaPatterns: options.getMetaPatterns(),
     };
     if (args.options?.dupeScope) {
       pinOptions.dupeScope = args.options.dupeScope;
@@ -735,7 +714,7 @@ const server = new Server({
     const pin = layers.get(srcRef);
     if ('urlPattern' in args.updates) {
       try {
-        parseURLPattern(args.updates.urlPattern);
+        new URLPattern(args.updates.urlPattern);
       } catch {
         throw new UserException(`Invalid URL pattern: ${args.updates.urlPattern}`);
       }
@@ -987,23 +966,23 @@ const server = new Server({
       await chrome.tabs.update(tab.id, { pinned: targetPinnedState });
     }
   },
-  'listUrlPatterns': async (args) => {
+  'listMetaPatterns': async (args) => {
     const options = await cache.getOptions();
-    return options.getUrlPatterns();
+    return options.getMetaPatterns();
   },
-  'addUrlPattern': async (args) => {
+  'addMetaPattern': async (args) => {
     const options = await cache.getOptions();
     try {
       new URLPattern(args.pattern);
     } catch {
       throw new UserException(`Invalid URL pattern: ${args.pattern}`);
     }
-    options.addUrlPattern(args.pattern);
+    options.addMetaPattern(args.pattern);
     await cache.flush();
   },
-  'removeUrlPattern': async (args) => {
+  'removeMetaPattern': async (args) => {
     const options = await cache.getOptions();
-    options.removeUrlPattern(args.index);
+    options.removeMetaPattern(args.index);
     await cache.flush();
   },
   'closeUnpinnedTabs': async (args) => {

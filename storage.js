@@ -44,7 +44,7 @@ const defaultOptions = {
     "command-30": "",
   },
   keyOrder: "ASDFGZXCVB",
-  urlPatterns: [
+  metaPatterns: [
     "https://docs.google.com/:type/d/:docid/*",
     "https://github.com/:org/:repo/*",
   ],
@@ -301,25 +301,25 @@ class Options {
   getKeyOrderIndexedByKeyCode() {
     return this.getKeyOrder().reduce((acc, val, idx) => acc.set(val.keyCode, idx), new Map());
   }
-  getUrlPatterns() {
-    return this.data.urlPatterns || [];
+  getMetaPatterns() {
+    return this.data.metaPatterns || [];
   }
-  setUrlPatterns(patterns) {
-    this.data.urlPatterns = patterns;
+  setMetaPatterns(patterns) {
+    this.data.metaPatterns = patterns;
     this.dirty = true;
   }
-  addUrlPattern(pattern) {
-    if (!this.data.urlPatterns) {
-      this.data.urlPatterns = [];
+  addMetaPattern(pattern) {
+    if (!this.data.metaPatterns) {
+      this.data.metaPatterns = [];
     }
-    this.data.urlPatterns.push(pattern);
+    this.data.metaPatterns.push(pattern);
     this.dirty = true;
   }
-  removeUrlPattern(index) {
-    if (!this.data.urlPatterns) {
+  removeMetaPattern(index) {
+    if (!this.data.metaPatterns) {
       throw new UserException("No URL pattern at index " + index);
     }
-    this.data.urlPatterns.splice(index, 1);
+    this.data.metaPatterns.splice(index, 1);
     this.dirty = true;
   }
   async flush() {
