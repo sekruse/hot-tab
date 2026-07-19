@@ -90,20 +90,20 @@ export class Cache {
     * Loads and returns the layer configurations.
     * @returns {Promise<LayerConfigs>} The layer configurations.
     */
-   async getLayerConfigs() {
-     if (this.layerConfigs === null) {
-       const loaded = await chrome.storage.local.get('layerConfigs');
-       this.layerConfigs = new LayerConfigs(loaded.layerConfigs);
-     }
-     return this.layerConfigs;
-   }
-   async getTabHistory() {
-     if (this.tabHistory === null) {
-       const loaded = await chrome.storage.local.get('tabHistory');
-       this.tabHistory = new TabHistory(loaded.tabHistory, this);
-     }
-     return this.tabHistory;
-   }
+  async getLayerConfigs() {
+    if (this.layerConfigs === null) {
+      const loaded = await chrome.storage.local.get('layerConfigs');
+      this.layerConfigs = new LayerConfigs(loaded.layerConfigs);
+    }
+    return this.layerConfigs;
+  }
+  async getTabHistory() {
+    if (this.tabHistory === null) {
+      const loaded = await chrome.storage.local.get('tabHistory');
+      this.tabHistory = new TabHistory(loaded.tabHistory, this);
+    }
+    return this.tabHistory;
+  }
   addPinChangedListener(listener) {
     this.pinChangedListeners.push(listener);
   }
@@ -362,102 +362,106 @@ class LayerConfigs {
     this.data[layerId] = { ...this.data[layerId], ...config };
     this.dirty = true;
   }
- /**
-    * Flushes the current configuration to persistent storage.
-    */
-   async flush() {
-     if (this.dirty) {
-       await chrome.storage.local.set({ 'layerConfigs': this.data });
-       this.dirty = false;
-     }
-   }
- }
-
- export const MAX_HISTORY_ENTRIES = 100;
-
-  export function isIgnoredInHistory(url) {
-    console.log('Checking', url);
-    return !url || url.startsWith('chrome://new') || url === 'about:blank';
-  }
-
   /**
-   * Manages tab navigation history.
-   */
-  class TabHistory {
-     constructor(data, cache) {
-      this.data = {
-        entries: data?.entries || [],
-      };
-      this.cache = cache;
+     * Flushes the current configuration to persistent storage.
+     */
+  async flush() {
+    if (this.dirty) {
+      await chrome.storage.local.set({ 'layerConfigs': this.data });
       this.dirty = false;
     }
-    /**
-     * Finds the index of the entry with the given tabId, or -1 if not found.
-     */
-    findPosition(tabId) {
-      for (let i = 0; i < this.data.entries.length; i++) {
-        if (this.data.entries[i].tabId === tabId) {
-          return i;
-        }
-      }
-      return -1;
-    }
-    push(entry) {
-      if (isIgnoredInHistory(entry.url)) return;
-      this.data.entries = this.data.entries.filter((e) => e.tabId !== entry.tabId);
-      this.data.entries.push(entry);
+  }
+}
 
-      // Cap size
-      if (this.data.entries.length > MAX_HISTORY_ENTRIES) {
-        this.data.entries.shift();
-      }
+export const MAX_HISTORY_ENTRIES = 100;
 
-      this.dirty = true;
+export function isIgnoredInHistory(url) {
+  console.log('Checking', url);
+  return !url || url.startsWith('chrome://new') || url === 'about:blank';
+}
+
+/**
+ * Manages tab navigation history.
+ */
+class TabHistory {
+  constructor(data, cache) {
+    this.data = {
+      entries: data?.entries || [],
+    };
+    this.cache = cache;
+    this.dirty = false;
+  }
+  /**
+   * Finds the index of the entry with the given tabId, or -1 if not found.
+   */
+  findPosition(tabId) {
+    for (let i = 0; i < this.data.entries.length; i++) {
+      if (this.data.entries[i].tabId === tabId) {
+        return i;
+      }
     }
-    /**
-     * Updates all entries according to the given function (entry) => newEntry.
-     * If the function returns `null`, then no update is performed.
-     * @param {function} fn - The update function.
-     */
-    update(fn) {
-      for (let i = 0; i < this.data.entries.length; i++) {
-        const newEntry = fn(this.data.entries[i]);
-        if (newEntry != null) {
-          if (isIgnoredInHistory(newEntry.url)) {
-            this.data.entries.splice(i, 1);
-            this.dirty = true;
-            i--;
-            continue;
-          }
-          this.data.entries[i] = newEntry;
+    return -1;
+  }
+  push(entry) {
+    if (isIgnoredInHistory(entry.url)) return;
+    this.data.entries = this.data.entries.filter((e) => e.tabId !== entry.tabId);
+    this.data.entries.push(entry);
+
+    // Cap size
+    if (this.data.entries.length > MAX_HISTORY_ENTRIES) {
+      this.data.entries.shift();
+    }
+
+    this.dirty = true;
+  }
+  /**
+   * Updates all entries according to the given function (entry) => newEntry.
+   * If the function returns `null`, then no update is performed.
+   * @param {function} fn - The update function.
+   * @return number of updated entries
+   */
+  update(fn) {
+    let count = 0;
+    for (let i = 0; i < this.data.entries.length; i++) {
+      const newEntry = fn(this.data.entries[i]);
+      if (newEntry != null) {
+        if (isIgnoredInHistory(newEntry.url)) {
+          this.data.entries.splice(i, 1);
           this.dirty = true;
+          i--;
+          count++;
+          continue;
         }
+        this.data.entries[i] = newEntry;
+        this.dirty = true;
       }
     }
-    /**
-     * Gets the entry at the given position.
-     */
-    getEntry(position) {
-      if (position < 0 || position >= this.data.entries.length) {
-        return null;
-      }
-      return this.data.entries[position];
+    return count;
+  }
+  /**
+   * Gets the entry at the given position.
+   */
+  getEntry(position) {
+    if (position < 0 || position >= this.data.entries.length) {
+      return null;
     }
-    /**
-     * Sets the entry at the given position.
-     */
-    setEntry(position, entry) {
-      this.data.entries[position] = entry;
-      this.dirty = true;
-    }
-    clear() {
-      this.data.entries = [];
-      this.dirty = true;
-    }
-    async flush() {
-      if (this.dirty) {
-        await chrome.storage.local.set({ 'tabHistory': this.data });
-        this.dirty = false;
-      }
+    return this.data.entries[position];
+  }
+  /**
+   * Sets the entry at the given position.
+   */
+  setEntry(position, entry) {
+    this.data.entries[position] = entry;
+    this.dirty = true;
+  }
+  clear() {
+    this.data.entries = [];
+    this.dirty = true;
+  }
+  async flush() {
+    if (this.dirty) {
+      await chrome.storage.local.set({ 'tabHistory': this.data });
+      this.dirty = false;
     }
   }
+}

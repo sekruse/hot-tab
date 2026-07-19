@@ -516,11 +516,16 @@ chrome.tabs.onActivated.addListener(async ({ tabId, windowId }) => {
 // Updates history entries when a tab is replaced (resurrected with a new tabId).
 chrome.tabs.onReplaced.addListener(async (addedTabId, removedTabId) => {
   const history = await cache.getTabHistory();
-  history.update((e) => {
+  const updates = history.update((e) => {
     if (e.tabId === removedTabId) {
       return { ...e, tabId: removedTabId };
     }
   });
+  if (!updates) {
+    const tab = await chrome.tabs.get(addedTabId);
+    const newPin = createPin(tab, { pinScope: 'page' });
+    history.push(newPin);
+  }
   await cache.flush();
 });
 
@@ -529,11 +534,14 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (!tab) return;
   const newPin = createPin(tab, { pinScope: 'page' });
   const history = await cache.getTabHistory();
-  history.update((e) => {
+  const updates = history.update((e) => {
     if (e.tabId === tabId) {
       return newPin;
     }
   });
+  if (!updates) {
+    history.push(newPin);
+  }
   await cache.flush();
 });
 
