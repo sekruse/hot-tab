@@ -375,11 +375,16 @@ class LayerConfigs {
 
  export const MAX_HISTORY_ENTRIES = 100;
 
- /**
-  * Manages tab navigation history.
-  */
- class TabHistory {
-    constructor(data, cache) {
+  export function isIgnoredInHistory(url) {
+    console.log('Checking', url);
+    return !url || url.startsWith('chrome://new') || url === 'about:blank';
+  }
+
+  /**
+   * Manages tab navigation history.
+   */
+  class TabHistory {
+     constructor(data, cache) {
       this.data = {
         entries: data?.entries || [],
       };
@@ -398,6 +403,7 @@ class LayerConfigs {
       return -1;
     }
     push(entry) {
+      if (isIgnoredInHistory(entry.url)) return;
       this.data.entries = this.data.entries.filter((e) => e.tabId !== entry.tabId);
       this.data.entries.push(entry);
 
@@ -417,6 +423,12 @@ class LayerConfigs {
       for (let i = 0; i < this.data.entries.length; i++) {
         const newEntry = fn(this.data.entries[i]);
         if (newEntry != null) {
+          if (isIgnoredInHistory(newEntry.url)) {
+            this.data.entries.splice(i, 1);
+            this.dirty = true;
+            i--;
+            continue;
+          }
           this.data.entries[i] = newEntry;
           this.dirty = true;
         }
