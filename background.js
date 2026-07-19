@@ -20,27 +20,10 @@ function parseURLPattern(patternString) {
   }
 }
 
-function normalizeUrlPattern(pattern) {
-  let normalized = pattern;
-  normalized = normalized.replace(/\*\*/g, '*');
-  if (!normalized.match(/^[\w+.-]+:/)) {
-    normalized = 'https://' + normalized;
-  }
-  try {
-    const url = new URL(normalized);
-    if (!normalized.includes('*') && (url.pathname === '/' || url.pathname === '')) {
-      normalized += '/*';
-    }
-  } catch {
-    // Can't parse, return as-is
-  }
-  return normalized;
-}
-
 function findMatchingPattern(patterns, tabUrl) {
   for (let i = 0; i < patterns.length; i++) {
     try {
-      const urlPattern = new URLPattern(normalizeUrlPattern(patterns[i]));
+      const urlPattern = new URLPattern(patterns[i]);
       if (urlPattern.test(tabUrl)) {
         return patterns[i];
       }
@@ -53,7 +36,7 @@ function findMatchingPattern(patterns, tabUrl) {
 
 function applyCaptures(pattern, tabUrl) {
   try {
-    const urlPattern = new URLPattern(normalizeUrlPattern(pattern));
+    const urlPattern = new URLPattern(pattern);
     const result = urlPattern.exec(tabUrl);
     if (!result) return null;
 
@@ -1011,7 +994,7 @@ const server = new Server({
   'addUrlPattern': async (args) => {
     const options = await cache.getOptions();
     try {
-      new URLPattern(normalizeUrlPattern(args.pattern));
+      new URLPattern(args.pattern);
     } catch {
       throw new UserException(`Invalid URL pattern: ${args.pattern}`);
     }
