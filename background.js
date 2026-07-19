@@ -800,6 +800,13 @@ const server = new Server({
   'clearHistory': async () => {
     const history = await cache.getTabHistory();
     history.clear();
+    // Historical: clear any pin stored at the Backspace key ref in layer 0.
+    // This slot was historically used as a "jump back" pin — clear pending values for consistency.
+    const layers = await cache.getLayers();
+    const jumpBackRef = { layerId: GLOBAL_LAYER_ID, key: 'Backspace' };
+    if (layers.get(jumpBackRef)) {
+      layers.remove(jumpBackRef);
+    }
     await cache.flush();
   },
   'moveWindows': async (args) => {
