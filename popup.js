@@ -15,7 +15,7 @@ const background = new Client([
   'updatePin',
   'toggleTabPinned',
   'getLayerConfig', 'setLayerConfig',
-  'navigateHistory', 'getTabHistory',
+  'navigateHistory', 'getTabHistory', 'clearHistory',
 ]);
 
 // Currently active layer ID.

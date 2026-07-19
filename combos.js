@@ -398,6 +398,14 @@ const defaultComboDescriptors = function() {
        closePopup: true,
      },
    });
+   combos.push({
+     sequence: '!h',
+     descriptor: {
+       method: 'clearHistory',
+       argTransformer: function() { return {}; },
+       closePopup: true,
+     },
+   });
    return combos;
 }();
 

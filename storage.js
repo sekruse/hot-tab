@@ -398,6 +398,7 @@ class LayerConfigs {
       return -1;
     }
     push(entry) {
+      this.data.entries = this.data.entries.filter((e) => e.tabId !== entry.tabId);
       this.data.entries.push(entry);
 
       // Cap size
@@ -406,6 +407,20 @@ class LayerConfigs {
       }
 
       this.dirty = true;
+    }
+    /**
+     * Updates all entries according to the given function (entry) => newEntry.
+     * If the function returns `null`, then no update is performed.
+     * @param {function} fn - The update function.
+     */
+    update(fn) {
+      for (let i = 0; i < this.data.entries.length; i++) {
+        const newEntry = fn(this.data.entries[i]);
+        if (newEntry != null) {
+          this.data.entries[i] = newEntry;
+          this.dirty = true;
+        }
+      }
     }
     /**
      * Gets the entry at the given position.
@@ -417,18 +432,15 @@ class LayerConfigs {
       return this.data.entries[position];
     }
     /**
-     * Gets the effective position for a tab.
-     * If the tab is not found, assumes end of history.
+     * Sets the entry at the given position.
      */
-    _effectivePosition(tabId) {
-      const pos = this.findPosition(tabId);
-      return pos >= 0 ? pos : Math.max(0, this.data.entries.length - 1);
+    setEntry(position, entry) {
+      this.data.entries[position] = entry;
+      this.dirty = true;
     }
-    canGoBack(tabId) {
-      return this._effectivePosition(tabId) > 0;
-    }
-    canGoForward(tabId) {
-      return this._effectivePosition(tabId) < this.data.entries.length - 1;
+    clear() {
+      this.data.entries = [];
+      this.dirty = true;
     }
     async flush() {
       if (this.dirty) {

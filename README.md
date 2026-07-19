@@ -84,6 +84,7 @@ The table below lists all supported command combos. Squared brackets (`[...]`) d
 | `hi` | Invert the selection of currently highlighted tabs. | |
 | `]` | Go to the next tab in the global tab history (the history of tabs you've navigated to across all windows). | |
 | `[` | Go to the previous tab in the global tab history. | |
+| `!h` | Clear tab history. |
 | `x[<layer>]<key>` | Close the pinned tab. | |
 | `X<layer>` | Close all pinned tabs from the layer. | |
 | `XX` | Close all pinned tabs from the current layer. | |

@@ -4,8 +4,9 @@ import combos from './combos.js';
 import { LAYER_IDS, GLOBAL_LAYER_ID, keysByKeyCode } from './keys.js';
 const cache = new Cache();
 
-let skipActivationCount = 0;
-let currentHistoryPosition = -1;
+// This toggle is flipped when this extension navigates through the tab history, signaling that the next tab activation should not update the history.
+// Because it seems essentially impossible that the service worker is preempted in between those two events, we don't track this value as state.
+let skipUpdateHistory = false;
 
 function parseURLPattern(patternString) {
   try {
@@ -190,17 +191,10 @@ async function activateTab(pin, options) {
   // Resolve the pin to an actual tab
   const { tab: existingTab, pin: resolvedPin } = await resolvePinToTab(pin);
 
-  // Skip the next onActivated event (triggered by our navigation below)
-  if (currentTab && existingTab && existingTab.id !== currentTab.id) {
-    skipActivationCount = 1;
-  }
-
   let tab = existingTab;
 
   if (tab == null || options?.recreate) {
     // We need to create a new tab.
-    // Skip the next onActivated event (triggered by our tab creation below)
-    skipActivationCount = 1;
     const createOptions = {};
     if (currentTab) {
       createOptions.windowId = currentTab.windowId;
@@ -210,6 +204,7 @@ async function activateTab(pin, options) {
       try {
         win = await chrome.windows.getLastFocused();
       } catch {
+        skipUpdateHistory = options?.skipUpdateHistory || false;
         win = await chrome.windows.create({ type: 'normal', focused: true });
       }
       createOptions.windowId = win.id;
@@ -233,6 +228,7 @@ async function activateTab(pin, options) {
 
     // Make sure the tab is in the foreground.
     if (!tab.active) {
+      skipUpdateHistory = options?.skipUpdateHistory || false;
       tab = await chrome.tabs.update(tab.id, { active: true });
     }
     await chrome.windows.update(tab.windowId, { focused: true });
@@ -364,7 +360,13 @@ async function calculateFallbackLayerName(layerId) {
  * @returns {Object} The pin.
  */
 function createPin(tab, options) {
-  const url = new URL(tab.url);
+  let url;
+  try {
+    url = new URL(tab.url);
+  } catch (error) {
+    console.warn(`Invalid URL pattern for tab "${tab.title}": "${tab.urlPattern}"`, error);
+    url = new URL('chrome://newtab');
+  }
   let urlPattern;
   if (options?.pinScope === 'origin') {
     urlPattern = `${url.origin}/*`;
@@ -520,9 +522,6 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (changeInfo.status != 'complete') {
     return;
   }
-  if (changeInfo.url) {
-    await updateHistoryEntry(tabId, tab.url);
-  }
   const entry = await findPin(tabId, LAYER_IDS);
   if (!entry) {
     return;
@@ -530,95 +529,58 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   await refreshBadgeTexts({ entries: [entry] });
 });
 
-/**
- * Updates a history entry for a given tabId.
- * Searches all history entries and updates url/urlPattern/title/favIconUrl.
- */
-async function updateHistoryEntry(tabId, url) {
-  const history = await cache.getTabHistory();
-  for (let i = 0; i < history.data.entries.length; i++) {
-    if (history.data.entries[i].tabId === tabId) {
-      const entry = history.data.entries[i];
-      entry.url = url;
-      // Derive urlPattern from the URL (same as default pinScope)
-      entry.urlPattern = url;
-      // Update title and favIconUrl if available
-      const tab = await chrome.tabs.get(tabId).catch(() => null);
-      if (tab) {
-        entry.title = tab.title;
-        entry.favIconUrl = tab.favIconUrl;
-      }
-      history.dirty = true;
-      break;
-    }
-  }
-}
-
-/**
- * Tracks tab navigation via onActivated.
- */
+// Tracks tab navigation via onActivated.
 chrome.tabs.onActivated.addListener(async ({ tabId, windowId }) => {
-  if (skipActivationCount > 0) {
-    skipActivationCount--;
+  console.log(`Tab activation: ${tabId}`);
+  // Don't update the history when asked to. Clear the toggle, because the skipping has been done.
+  if (skipUpdateHistory) {
+    skipUpdateHistory = false;
     return;
   }
 
+  // At this point, we need to update the history, putting the activated tab to the tail.
+  // First get the tab to store it.
   const history = await cache.getTabHistory();
-
-  // Deduplicate: skip if this tab is already the last history entry
-  const lastEntry = history.data.entries[history.data.entries.length - 1];
-  if (lastEntry && lastEntry.tabId === tabId) {
-    return;
-  }
-
   const tab = await chrome.tabs.get(tabId).catch(() => null);
   if (!tab) {
     return;
   }
 
-  await pushToHistory(tab);
-  currentHistoryPosition = history.data.entries.length - 1;
+  // Update and flush the history.
+  history.push(createPin(tab, { pinScope: 'page' }));
+  logTabHistory(history);
+  await cache.flush();
 });
 
-/**
- * Pushes a tab onto the history stack.
- * Truncates forward entries based on the current in-memory position.
- */
-async function pushToHistory(tab) {
+
+// Updates history entries when a tab is replaced (resurrected with a new tabId).
+chrome.tabs.onReplaced.addListener(async (addedTabId, removedTabId) => {
   const history = await cache.getTabHistory();
-
-  // Truncate forward entries at current position
-  if (currentHistoryPosition >= 0 && currentHistoryPosition < history.data.entries.length - 1) {
-    history.data.entries = history.data.entries.slice(0, currentHistoryPosition + 1);
-  }
-
-  history.data.entries.push(createPin(tab));
-
-  // Cap size
-  if (history.data.entries.length > MAX_HISTORY_ENTRIES) {
-    history.data.entries.shift();
-    currentHistoryPosition = Math.max(0, currentHistoryPosition - 1);
-  }
-
-  history.dirty = true;
+  history.update((e) => {
+    if (e.tabId === removedTabId) {
+      e.tabId = addedTabId;
+    }
+  });
+  logTabHistory(history);
   await cache.flush();
+});
+
+function logTabHistory(history) {
+  console.log(`Tab history: 
+${history.data.entries.map(e => e.url).join('\n')}`)
 }
 
-/**
- * Updates history entries when a tab is replaced (resurrected with a new tabId).
- */
-chrome.tabs.onReplaced.addListener((addedTabId, removedTabId) => {
-  skipActivationCount = 1;
-  cache.getTabHistory().then(history => {
-    for (let i = 0; i < history.data.entries.length; i++) {
-      if (history.data.entries[i].tabId === removedTabId) {
-        history.data.entries[i].tabId = addedTabId;
-        history.dirty = true;
-        break;
-      }
+// Updates the history when a tab has changed.
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  let newPin = createPin(tab, { pinScope: 'page' });
+  const history = await cache.getTabHistory();
+  history.update((e) => {
+    if (e.tabId === tabId) {
+      return newPin;
     }
-    cache.flush();
   });
+  logTabHistory(history);
+  await cache.flush();
 });
 
 /**
@@ -842,39 +804,39 @@ const server = new Server({
     return history.data.entries.map((entry) => ({ ...entry }));
   },
   'navigateHistory': async (args) => {
+    // Determine the history entry to navigate to.
     const history = await cache.getTabHistory();
     let newPos;
     if (args.index !== undefined) {
       newPos = args.index;
     } else {
       const dir = args.direction;  // -1 or +1
-
-      // Determine current position from currentHistoryPosition or derive from active tab
-      let pos = currentHistoryPosition;
-      if (pos === -1) {
-        const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-        if (currentTab) {
-          pos = history.findPosition(currentTab.id);
-        }
-        if (pos === -1) {
-          pos = history.data.entries.length - 1;
-        }
+      const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+      let pos;
+      if (currentTab) {
+        pos = history.findPosition(currentTab.id);
       }
-
+      if (pos === -1) {
+        // Fallback: If the current tab isn't in the history, we act as if we were beyond the latest entry, permitting to go back at least.
+        console.log(`Current tab (${currentTab.url}, id=${currentTab.id}) not found in the history.`);
+        pos = history.data.entries.length;
+      }
       newPos = pos + dir;
     }
-
     if (newPos < 0 || newPos >= history.data.entries.length) {
-      throw new UserException('No history entry in that direction.');
+      throw new UserException(`No history entry at position ${newPos}.`);
     }
 
-    const entry = history.data.entries[newPos];
-    currentHistoryPosition = newPos;
-
-    // Activate the history entry's tab (reuses the same resolution/creation logic)
-    const { pin: finalPin } = await activateTab(entry, { recreate: false, summon: false });
-    history.data.entries[newPos] = finalPin;
-    history.dirty = true;
+    // Activate the history entry's tab. Make sure to update the tab ID if that changes.
+    const entry = history.getEntry(newPos);
+    const { pin: finalPin } = await activateTab(entry, { recreate: false, summon: false, skipUpdateHistory: true });
+    history.setEntry(newPos, finalPin);
+    logTabHistory(history);
+    await cache.flush();
+  },
+  'clearHistory': async () => {
+    const history = await cache.getTabHistory();
+    history.clear();
     await cache.flush();
   },
   'moveWindows': async (args) => {
