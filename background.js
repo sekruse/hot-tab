@@ -531,7 +531,7 @@ chrome.tabs.onReplaced.addListener(async (addedTabId, removedTabId) => {
 
 // Updates the history when a tab has changed.
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-  if (!tab) return;
+  if (!tab || !tab.active) return;
   const newPin = createPin(tab, { pinScope: 'page' });
   const history = await cache.getTabHistory();
   const updates = history.update((e) => {
