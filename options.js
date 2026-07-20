@@ -4,7 +4,7 @@ import toast from './toast.js';
 const background = new Client([
   'listCommandCombos', 'setCommandCombo',
   'getKeyOrder', 'setKeyOrder',
-  'listUrlPatterns', 'addUrlPattern', 'removeUrlPattern',
+  'listMetaPatterns', 'addMetaPattern', 'removeMetaPattern',
 ]);
 
 async function refreshKeyOrder() {
@@ -58,10 +58,10 @@ async function refreshShortcuts() {
     });
 }
 
-async function refreshUrlPatterns() {
-  const list = document.getElementById('urlPatternsList');
+async function refreshMetaPatterns() {
+  const list = document.getElementById('metaPatternsList');
   list.innerHTML = '';
-  const patterns = await background.listUrlPatterns();
+  const patterns = await background.listMetaPatterns();
   if (patterns.length === 0) {
     const emptyMsg = document.createElement('p');
     emptyMsg.classList.add('margin-bottom');
@@ -80,8 +80,8 @@ async function refreshUrlPatterns() {
     removeBtn.innerText = '\u00D7';
     removeBtn.title = 'Remove pattern';
     removeBtn.addEventListener('click', toast.catch(async () => {
-      await background.removeUrlPattern({ index });
-      await refreshUrlPatterns();
+      await background.removeMetaPattern({ index });
+      await refreshMetaPatterns();
     }));
     item.appendChild(removeBtn);
     list.appendChild(item);
@@ -91,7 +91,7 @@ async function refreshUrlPatterns() {
 document.addEventListener('DOMContentLoaded', toast.catch(async () => {
   await refreshKeyOrder();
   await refreshShortcuts();
-  await refreshUrlPatterns();
+  await refreshMetaPatterns();
 
   const orderInput = document.getElementById('orderInput');
   orderInput.addEventListener('input', toast.catch(async (event) => {
@@ -99,22 +99,22 @@ document.addEventListener('DOMContentLoaded', toast.catch(async () => {
     await refreshKeyOrder();
   }));
 
-  const urlPatternInput = document.getElementById('urlPatternInput');
-  const addUrlPatternBtn = document.getElementById('addUrlPatternBtn');
-  addUrlPatternBtn.addEventListener('click', toast.catch(async () => {
-    const pattern = urlPatternInput.value.trim();
+  const metaPatternInput = document.getElementById('metaPatternInput');
+  const addMetaPatternBtn = document.getElementById('addMetaPatternBtn');
+  addMetaPatternBtn.addEventListener('click', toast.catch(async () => {
+    const pattern = metaPatternInput.value.trim();
     if (!pattern) return;
-    await background.addUrlPattern({ pattern });
-    urlPatternInput.value = '';
-    await refreshUrlPatterns();
+    await background.addMetaPattern({ pattern });
+    metaPatternInput.value = '';
+    await refreshMetaPatterns();
   }));
-  urlPatternInput.addEventListener('keydown', toast.catch(async (event) => {
+  metaPatternInput.addEventListener('keydown', toast.catch(async (event) => {
     if (event.key === 'Enter') {
-      const pattern = urlPatternInput.value.trim();
+      const pattern = metaPatternInput.value.trim();
       if (!pattern) return;
-      await background.addUrlPattern({ pattern });
-      urlPatternInput.value = '';
-      await refreshUrlPatterns();
+      await background.addMetaPattern({ pattern });
+      metaPatternInput.value = '';
+      await refreshMetaPatterns();
     }
   }));
 }));
