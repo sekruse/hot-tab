@@ -339,7 +339,7 @@ function createPin(tab, options) {
     urlPattern = `${url.origin}/*`;
   } else if (options?.pinScope === 'page') {
     const metaPatterns = options.metaPatterns || [];
-    let urlPattern = applyMetaPatterns(metaPatterns, tab.url);
+    urlPattern = applyMetaPatterns(metaPatterns, tab.url);
   }
   if (!urlPattern) {
     urlPattern = urlToPatternString(url);
