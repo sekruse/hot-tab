@@ -163,21 +163,23 @@ class Layers {
     this.dirty = false;
   }
   set(keyRef, val) {
-    this.data[keyRef.layerId][keyRef.key] = val;
+    const cloned = { ...val };
+    this.data[keyRef.layerId][keyRef.key] = cloned;
     this.dirty = true;
     for (let i = 0; i < this.cache.pinChangedListeners.length; i++) {
       const listener = this.cache.pinChangedListeners[i];
-      listener(keyRef, val, 'SET');
+      listener(keyRef, { ...cloned }, 'SET');
     }
   }
   get(keyRef) {
-    return this.data[keyRef.layerId][keyRef.key];
+    const val = this.data[keyRef.layerId]?.[keyRef.key];
+    return val ? { ...val } : val;
   }
   remove(keyRef) {
     if (!(keyRef.key in this.data[keyRef.layerId])) {
       throw new UserException(`No pin for ${keyRef.key} at layer ${keyRef.layerId}.`);
     }
-    const val = this.data[keyRef.layerId][keyRef.key];
+    const val = { ...this.data[keyRef.layerId][keyRef.key] };
     delete this.data[keyRef.layerId][keyRef.key];
     this.dirty = true;
     for (let i = 0; i < this.cache.pinChangedListeners.length; i++) {
@@ -243,7 +245,7 @@ class Layer {
         effectiveLayer[key] = layerData[key];
         entries.push({
           keyRef: { layerId, key },
-          value: layerData[key],
+          value: { ...layerData[key] },
         });
       }
     }
@@ -405,7 +407,7 @@ class TabHistory {
   push(entry) {
     if (isIgnoredInHistory(entry.url)) return;
     this.data.entries = this.data.entries.filter((e) => e.tabId !== entry.tabId);
-    this.data.entries.push(entry);
+    this.data.entries.push({ ...entry });
 
     // Cap size
     if (this.data.entries.length > MAX_HISTORY_ENTRIES) {
@@ -432,26 +434,26 @@ class TabHistory {
           count++;
           continue;
         }
-        this.data.entries[i] = newEntry;
+        this.data.entries[i] = { ...newEntry };
         this.dirty = true;
       }
     }
     return count;
   }
-  /**
-   * Gets the entry at the given position.
-   */
+ /**
+    * Gets the entry at the given position.
+    */
   getEntry(position) {
     if (position < 0 || position >= this.data.entries.length) {
       return null;
     }
-    return this.data.entries[position];
+    return { ...this.data.entries[position] };
   }
   /**
-   * Sets the entry at the given position.
-   */
+    * Sets the entry at the given position.
+    */
   setEntry(position, entry) {
-    this.data.entries[position] = entry;
+    this.data.entries[position] = { ...entry };
     this.dirty = true;
   }
   clear() {
