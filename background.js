@@ -518,13 +518,16 @@ chrome.tabs.onReplaced.addListener(async (addedTabId, removedTabId) => {
   const history = await cache.getTabHistory();
   const updates = history.update((e) => {
     if (e.tabId === removedTabId) {
-      return { ...e, tabId: removedTabId };
+      return { ...e, tabId: addedTabId };
     }
   });
   if (!updates) {
-    const tab = await chrome.tabs.get(addedTabId);
-    const newPin = createPin(tab, { pinScope: 'page' });
-    history.push(newPin);
+    const existing = history.findPosition(addedTabId);
+    if (existing === -1) {
+      const tab = await chrome.tabs.get(addedTabId);
+      const newPin = createPin(tab, { pinScope: 'page' });
+      history.push(newPin);
+    }
   }
   await cache.flush();
 });

@@ -378,7 +378,6 @@ class LayerConfigs {
 export const MAX_HISTORY_ENTRIES = 100;
 
 export function isIgnoredInHistory(url) {
-  console.log('Checking', url);
   return !url || url.startsWith('chrome://new') || url === 'about:blank';
 }
 
