@@ -766,25 +766,54 @@ const server = new Server({
     return history.data.entries.map((entry) => ({ ...entry }));
   },
   'navigateHistory': async (args) => {
-    // Determine the history entry to navigate to.
     const history = await cache.getTabHistory();
+    // Find the position in history to navigate to.
     let newPos;
     if (args.index !== undefined) {
+      // Absolute case — position finding: check if the target tab is still open.
       newPos = args.index;
+      if (args.skipClosedTabs) {
+        const entry = history.getEntry(newPos);
+        if (!entry || !entry.tabId) {
+          newPos = -1;
+        } else {
+          try {
+            await chrome.tabs.get(entry.tabId);
+          } catch {
+            newPos = -1;
+          }
+        }
+      }
     } else {
-      const dir = args.direction;  // -1 or +1
+      // Relative case — position finding: compute position, optionally scan for open tabs.
+      let dir = args.direction;  // -1 or +1
       const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-      let pos;
+      let pos = -1;
       if (currentTab) {
         pos = history.findPosition(currentTab.id);
       }
       if (pos === -1) {
         // Fallback: If the current tab isn't in the history, we act as if we were beyond the latest entry, permitting to go back at least.
-        console.log(`Current tab (${currentTab.url}, id=${currentTab.id}) not found in the history.`);
+        console.log(`Current tab (${currentTab?.url}, id=${currentTab?.id}) not found in the history.`);
         pos = history.data.entries.length;
       }
       newPos = pos + dir;
+      if (args?.skipClosedTabs) {
+        while (newPos >= 0 && newPos < history.data.entries.length) {
+          const entry = history.getEntry(newPos);
+          if (entry && entry.tabId) {
+            try {
+              await chrome.tabs.get(entry.tabId);
+              break;  // Found open tab at candidate
+            } catch {
+              // Closed, continue scanning
+            }
+          }
+          newPos += dir;
+        }
+      }
     }
+    // Navigation: throw if no valid position was found.
     if (newPos < 0 || newPos >= history.data.entries.length) {
       throw new UserException(`No history entry at position ${newPos}.`);
     }

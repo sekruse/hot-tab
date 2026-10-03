@@ -383,7 +383,7 @@ const defaultComboDescriptors = function() {
      },
    });
    combos.push({
-     sequence: '[',
+     sequence: '{',
      descriptor: {
        method: 'navigateHistory',
        argTransformer: function() { return { direction: -1, layerId: 0 }; },
@@ -391,10 +391,26 @@ const defaultComboDescriptors = function() {
      },
    });
    combos.push({
-     sequence: ']',
+     sequence: '}',
      descriptor: {
        method: 'navigateHistory',
        argTransformer: function() { return { direction: 1, layerId: 0 }; },
+       closePopup: true,
+     },
+   });
+   combos.push({
+     sequence: '[',
+     descriptor: {
+       method: 'navigateHistory',
+       argTransformer: function() { return { direction: -1, layerId: 0, skipClosedTabs: true }; },
+       closePopup: true,
+     },
+   });
+   combos.push({
+     sequence: ']',
+     descriptor: {
+       method: 'navigateHistory',
+       argTransformer: function() { return { direction: 1, layerId: 0, skipClosedTabs: true }; },
        closePopup: true,
      },
    });
