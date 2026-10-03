@@ -255,6 +255,7 @@ async function showDialog(key, layerId, pin) {
   document.getElementById('inputTitle').value = pin.title;
   document.getElementById('inputURL').value = pin.url;
   document.getElementById('inputURLPattern').value = pin.urlPattern;
+  document.getElementById('inputPinned').checked = !!pin.pinned;
   modal.show();
 }
 
@@ -268,6 +269,7 @@ async function saveFromDialog() {
       title: document.getElementById('inputTitle').value,
       url: document.getElementById('inputURL').value,
       urlPattern: document.getElementById('inputURLPattern').value,
+      pinned: document.getElementById('inputPinned').checked,
     },
   });
   modal.hide();

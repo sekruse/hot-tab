@@ -102,49 +102,43 @@ function urlToPatternString(url) {
  * Does NOT modify any slots or layers. Returns the resolved tab and an updated pin.
  */
 async function resolvePinToTab(pin, keyRef) {
+  let tab;
+
   // First, try to retrieve the tab by its stored tabId.
   if (pin.tabId !== undefined) {
     try {
-      const tab = await chrome.tabs.get(pin.tabId);
-      return { tab, pin: createPin(tab) };
+      tab = await chrome.tabs.get(pin.tabId);
     } catch (error) {
       console.log(`Tab for ${pin.title} not found: ${error}`);
     }
   }
+
   // Otherwise, try to find a tab that matches the URL pattern.
-  let urlPattern;
-  try {
-    urlPattern = new URLPattern(pin.urlPattern);
-  } catch (e) {
-    console.warn(`Bad URL pattern for ${keyRef ? JSON.stringify(keyRef) : "n/a"}: "${pin.urlPattern}"`, e);
-    // Degrade gracefully, mark the pin as dangling.
-    return { tab: null, pin: { ...pin } };
-  }
-
-  let tabs = await chrome.tabs.query({});
-  tabs = tabs.filter((tab) => {
+  if (!tab) {
+    let urlPattern;
     try {
-      return urlPattern.test(tab.url);
-    } catch {
-      return false;
+      urlPattern = new URLPattern(pin.urlPattern);
+    } catch (e) {
+      console.warn(`Bad URL pattern for ${keyRef ? JSON.stringify(keyRef) : "n/a"}: "${pin.urlPattern}"`, e);
+      // Degrade gracefully, mark the pin as dangling.
+      return { tab: null, pin: { ...pin } };
     }
-  });
 
-  if (tabs.length > 0) {
-    const tab = tabs[0];
-    return {
-      tab,
-      pin: {
-        ...createPin(tab),
-        title: pin.title,
-        favIconUrl: pin.favIconUrl,
-        url: pin.url,
-        urlPattern: pin.urlPattern,
-      },
-    };
+    const tabs = await chrome.tabs.query({});
+    const matchingTabs = tabs.filter((t) => {
+      try {
+        return urlPattern.test(t.url);
+      } catch {
+        return false;
+      }
+    });
+
+    if (matchingTabs.length > 0) {
+      tab = matchingTabs[0];
+    }
   }
-  // Tab not found — mark as dangling.
-  return { tab: null, pin: { ...pin } };
+
+  return { tab, pin: associatePin(pin, tab) };
 }
 
 /**
@@ -156,13 +150,14 @@ async function activateTab(pin, options) {
   const [currentTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
 
   // Resolve the pin to an actual tab
-  const { tab: existingTab, pin: resolvedPin } = await resolvePinToTab(pin);
-
-  let tab = existingTab;
+  let { tab, pin: resolvedPin } = await resolvePinToTab(pin);
 
   if (tab == null || options?.recreate) {
     // We need to create a new tab.
-    const createOptions = {};
+    const createOptions = {
+      url: pin.url,
+      pinned: pin.pinned,
+    };
     if (currentTab) {
       createOptions.windowId = currentTab.windowId;
       createOptions.index = currentTab.index + 1;
@@ -176,8 +171,7 @@ async function activateTab(pin, options) {
       }
       createOptions.windowId = win.id;
     }
-    const createdTab = await chrome.tabs.create({ url: resolvedPin.url, ...createOptions });
-    tab = createdTab;
+    tab = await chrome.tabs.create({ ...createOptions });
   }
 
   if (tab != null) {
@@ -202,30 +196,8 @@ async function activateTab(pin, options) {
   }
 
   // Return the pin that should be persisted (freshly created or resolved)
-  const finalPin = tab ? createPin(tab) : resolvedPin;
+  const finalPin = tab ? associatePin(resolvedPin, tab) : resolvedPin;
   return { tab, pin: finalPin };
-}
-
-/**
- * Finds the tab linked to the given pin. Updates the layer slot with the resolved pin.
- * @param {Object} pin - The pin to work with.
- * @param {Object} keyRef - A reference to the slot the pin is stored at.
- * @returns {Promise<Object>} The updated pin and the tab if any could be found.
- */
-async function findTab(pin, keyRef) {
-  const { tab, pin: resolvedPin } = await resolvePinToTab(pin, keyRef);
-
-  if (tab) {
-    const layers = await cache.getLayers();
-    layers.set(keyRef, resolvedPin);
-    return { pin: resolvedPin, tab };
-  }
-
-  // Tab not found — mark as dangling.
-  delete resolvedPin.tabId;
-  const layers = await cache.getLayers();
-  layers.set(keyRef, resolvedPin);
-  return { pin: resolvedPin };
 }
 
 /**
@@ -238,10 +210,15 @@ async function listPins(layerIds, options) {
   let entries = layerIds
     ? layers.getView(layerIds).listEntries()
     : layers.listAllEntries();
-  return Promise.all(entries.map(async (entry) => {
-    const { pin } = await findTab(entry.value, entry.keyRef);
+  const results = await Promise.all(entries.map(async (entry) => {
+    const { pin } = await resolvePinToTab(entry.value, entry.keyRef);
     return { keyRef: entry.keyRef, pin };
   }));
+  for (const result of results) {
+    layers.set(result.keyRef, result.pin);
+  }
+  await cache.flush();
+  return results;
 }
 
 /**
@@ -352,8 +329,23 @@ function createPin(tab, options) {
     urlPattern: urlPattern,
     favIconUrl: tab.favIconUrl,
     windowId: tab.windowId,
+    pinned: tab.pinned,
   };
   return pin;
+}
+
+/**
+ * Associates a pin against a live tab, preserving the pin's identity
+ * fields while refreshing live tab state (tabId, index, windowId).
+ */
+function associatePin(pin, tab) {
+  let tabId, index, windowId;
+  if (tab) {
+    tabId = tab.id;
+    index = tab.index;
+    windowId = tab.windowId;
+  }
+  return { ...pin, tabId, index, windowId };
 }
 
 /**
@@ -384,7 +376,7 @@ async function closeTab(key, layerId) {
   if (!pin) {
     throw new UserException(`There is no pin at ${key} in layer ${layerId}.`);
   }
-  const { tab: pinnedTab } = await findTab(pin, { key, layerId });
+  const { tab: pinnedTab } = await resolvePinToTab(pin, { key, layerId });
   if (!pinnedTab) {
     return;
   }
@@ -721,7 +713,7 @@ const server = new Server({
         throw new UserException(`Invalid URL pattern: ${args.updates.urlPattern}`);
       }
     }
-    ['title', 'url', 'urlPattern'].forEach(p => {
+    ['title', 'url', 'urlPattern', 'pinned'].forEach(p => {
       if (p in args.updates) {
         pin[p] = args.updates[p];
       }

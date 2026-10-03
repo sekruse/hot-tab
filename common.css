@@ -21,6 +21,11 @@ input {
   padding: 4px 2px;
   width: 100%;
 }
+
+input[type="checkbox"] {
+  width: auto;
+  display: inline-block;
+}
 button {
   padding: 4px 4px;
   border-radius: 3px;
