@@ -44,6 +44,7 @@ async function refreshPopup() {
       key.removeAttribute('data-tooltip');
     } else {
       key.classList.toggle('key-highlighted', digit.value === layerId);
+      key.classList.toggle('key-global', digit.value === 0);
     }
     key.classList.remove('key-glow-blue');
   });
@@ -53,6 +54,7 @@ async function refreshPopup() {
     if (!keyDiv) {
       throw new Error(`No keyDiv found for ${keyRef.key} / ${JSON.stringify(pin)}`);
     }
+    keyDiv.classList.toggle('key-global', keyRef.layerId === 0);
     keyDiv.setAttribute('data-tooltip', pin.title);
     keyDiv.replaceChildren(createIcon(pin));
   });

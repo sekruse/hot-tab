@@ -156,6 +156,10 @@ button:hover, button:focus {
   font-weight: bold;
   overflow: hidden;
 }
+.key-global {
+  background-color: #a8a8a8;
+  border-color: #585858;
+}
 
 
 /* Tabs list */
