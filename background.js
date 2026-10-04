@@ -587,6 +587,190 @@ async function moveTabsRight(tabIds, targetStartIndex) {
   return movedTabs;
 }
 
+// Gap (px) between adjacent windows and along the edges of the work area.
+const ARRANGE_GAP = 6;
+
+/**
+ * Layout specs for arrangeWindows. A spec is either:
+ *   { type: 'grid', cols } — equal cells, row-major; the last row may be short (empty space on the right).
+ *   { type: 'split', axis: 'v' | 'h', parts } —
+ *     splits the area into sub-areas along axis (with a gap between them). Each part is
+ *     { ratio, count, spec }: it takes ratio/totalRatio of the space, receives count windows,
+ *     and lays them out recursively per spec. Defaults: count = 1, spec = grid(1).
+ *   { type: 'cascade', stepX, stepY } —
+ *     Pile / cascade: all windows the same size, stacked from the top-left corner,
+ *     each offset by (stepX, stepY) from the previous one (they overlap).
+ *
+ * Axis semantics: 'v' = vertical divider, so parts are laid out left-to-right
+ * (width split); 'h' = horizontal divider, so parts are laid out top-to-bottom
+ * (height split).
+ */
+// A grid of `cols` equal columns.
+const grid = (cols) => ({ type: 'grid', cols });
+// One part of a split: `ratio` share of the space, `count` windows, laid out per `spec`.
+const part = (ratio, count = 1, spec = grid(1)) => ({ ratio, count, spec });
+// A recursive split of the area into the given parts along `axis`.
+const split = (axis, ...parts) => ({ type: 'split', axis, parts });
+// A "Solitaire" cascade: windows of equal size stacked from the top-left corner,
+// each offset by (stepX, stepY) from the previous one.
+const cascade = (stepX = 30, stepY = 30) => ({ type: 'cascade', stepX, stepY });
+
+// Hand-tuned layouts per window count; each entry is one press of the cycle.
+const ARRANGE_LAYOUTS = {
+  1: [
+    // Single window fills the whole area.
+    grid(1),
+  ],
+  2: [
+    // 50:50 side by side
+    split('v', part(1), part(1)),
+    // 66:33 side by side (big left).
+    split('v', part(2), part(1)),
+    // 33:66 side by side (big right).
+    split('v', part(1), part(2)),
+    // 50:50 horizontal stack
+    split('h', part(1), part(1)),
+    // Overlapping cascade ("Pile").
+    cascade(),
+  ],
+  3: [
+    // Equal widths.
+    split('v', part(1, 3)),
+    // One big left (2/3), two stacked on the right.
+    split('v', part(2), part(1, 2)),
+    // One big left (2/3), two stacked on the right.
+    split('v', part(1), part(1, 2)),
+    // Overlapping cascade ("Pile").
+    cascade(),
+  ],
+  4: [
+    // 2x2 grid.
+    grid(2),
+    // Four equal side-by-side columns.
+    grid(4),
+    // Four stacked full-width rows.
+    grid(1),
+    // Two 50:50 stacks side by side (double stack).
+    split('v', part(2, 2), part(1, 2)),
+    // Overlapping cascade ("Pile").
+    cascade(),
+  ],
+};
+
+// For window counts without a hand-tuned table: a near-square grid (cols = ceil(sqrt(n)))
+// plus its transposition (grid by rows) when the shape is not square, and always a cascade.
+function defaultArrangeLayouts(n) {
+  const cols = Math.ceil(Math.sqrt(n));
+  const rows = Math.ceil(n / cols);
+  const layouts = [grid(cols)];
+  if (rows !== cols) {
+    layouts.push(grid(rows));
+  }
+  // Overlapping cascade ("Pile").
+  layouts.push(cascade());
+  return layouts;
+}
+
+// Recursively resolve a layout spec into one { left, top, width, height } rect per window.
+// Rects are pushed in row-major / part order, matching the order of the window list.
+function computeArrangeLayout(spec, count, area) {
+  const rects = [];
+  // Lay out n windows as a grid of `cols` columns inside `rect`.
+  // The cell pitch includes a gap, and the first/last margins (hence (cols+1) * GAP),
+  // so the grid is inset from the edges of the area.
+  const placeGrid = (cols, n, rect) => {
+    const rows = Math.ceil(n / cols);
+    const cellWidth = (rect.right - rect.left - (cols + 1) * ARRANGE_GAP) / cols;
+    const cellHeight = (rect.bottom - rect.top - (rows + 1) * ARRANGE_GAP) / rows;
+    for (let i = 0; i < n; i++) {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const left = Math.round(rect.left + ARRANGE_GAP + col * (cellWidth + ARRANGE_GAP));
+      const top = Math.round(rect.top + ARRANGE_GAP + row * (cellHeight + ARRANGE_GAP));
+      // The rightmost column / bottommost row ends exactly at the area edge (minus margin)
+      // instead of the computed cell end, so rounding drift never leaves a sliver of space.
+      const right = col + 1 < cols
+        ? Math.round(rect.left + ARRANGE_GAP + (col + 1) * (cellWidth + ARRANGE_GAP)) - ARRANGE_GAP
+        : rect.right - ARRANGE_GAP;
+      const bottom = row + 1 < rows
+        ? Math.round(rect.top + ARRANGE_GAP + (row + 1) * (cellHeight + ARRANGE_GAP)) - ARRANGE_GAP
+        : rect.bottom - ARRANGE_GAP;
+      rects.push({ left, top, width: right - left, height: bottom - top });
+    }
+  };
+  // Stack n windows in a cascade: all the same size, starting at the top-left corner and
+  // each offset by (stepX, stepY) from the previous one. The steps shrink if needed so the
+  // whole cascade still fits inside `rect` (windows keep at least a 1px size).
+  const placeCascade = (stepX, stepY, n, rect) => {
+    const maxWidth = rect.right - rect.left - 2 * ARRANGE_GAP;
+    const maxHeight = rect.bottom - rect.top - 2 * ARRANGE_GAP;
+    const fitStep = (step, limit) => Math.min(step, Math.floor((limit - 1) / (n - 1)));
+    const dx = fitStep(stepX, maxWidth);
+    const dy = fitStep(stepY, maxHeight);
+    const width = maxWidth - (n - 1) * dx;
+    const height = maxHeight - (n - 1) * dy;
+    for (let i = 0; i < n; i++) {
+      rects.push({
+        left: Math.round(rect.left + ARRANGE_GAP + i * dx),
+        top: Math.round(rect.top + ARRANGE_GAP + i * dy),
+        width,
+        height,
+      });
+    }
+  };
+  // Dispatch one spec node: grids and cascades place windows directly, splits carve
+  // sub-areas and recurse into each part.
+  const place = (s, n, rect) => {
+    if (s.type === 'grid') {
+      placeGrid(s.cols, n, rect);
+    } else if (s.type === 'cascade') {
+      placeCascade(s.stepX, s.stepY, n, rect);
+    } else {
+      const vertical = s.axis === 'v';
+      const total = vertical ? rect.right - rect.left : rect.bottom - rect.top;
+      const far = vertical ? rect.right : rect.bottom;
+      // Space for the parts themselves, excluding the gaps between them.
+      const available = total - (s.parts.length - 1) * ARRANGE_GAP;
+      const sumRatio = s.parts.reduce((sum, p) => sum + p.ratio, 0);
+      let cursor = vertical ? rect.left : rect.top;
+      s.parts.forEach((p, i) => {
+        // Each part takes its ratio share; the last part takes whatever remains so the
+        // sub-areas tile the area exactly despite per-part rounding.
+        const size = i + 1 < s.parts.length
+          ? Math.round(available * p.ratio / sumRatio)
+          : far - cursor;
+        const subRect = vertical
+          ? { left: cursor, top: rect.top, right: cursor + size, bottom: rect.bottom }
+          : { left: rect.left, top: cursor, right: rect.right, bottom: cursor + size };
+        place(p.spec, p.count, subRect);
+        cursor += size;
+        if (i + 1 < s.parts.length) {
+          cursor += ARRANGE_GAP;
+        }
+      });
+    }
+  };
+  place(spec, count, area);
+  return rects;
+}
+
+// True when the windows already sit where `rects` says (i.e. this layout is the current one).
+// Matching is position-only — sizes may differ, e.g. Chrome minimum window size — and
+// order-independent, since chrome.windows.getAll order is not guaranteed.
+function arrangeLayoutMatches(rects, windows) {
+  if (rects.length !== windows.length) {
+    return false;
+  }
+  const tolerance = 2;
+  const byPosition = (a, b) => a.top - b.top || a.left - b.left;
+  const sortedRects = [...rects].sort(byPosition);
+  const sortedWindows = [...windows].sort(byPosition);
+  return sortedRects.every((r, i) => {
+    const w = sortedWindows[i];
+    return Math.abs(w.left - r.left) <= tolerance && Math.abs(w.top - r.top) <= tolerance;
+  });
+}
+
 const server = new Server({
   'getState': async (args) => {
     const state = await cache.getState();
@@ -884,6 +1068,79 @@ const server = new Server({
 
     // Apply pinning and highlighting
     await updateWithRetry(tabProps);
+  },
+  // Tile the windows of every normal (non-incognito) window across the combined work
+  // area of all displays. Each press cycles to the next layout for the current window
+  // count; the current layout is detected statelessly by matching window positions.
+  'arrangeWindows': async (args) => {
+    let windows = await chrome.windows.getAll({ windowTypes: ['normal'] });
+    const acceptedWindowStates = new Set(['normal', 'maximized']);
+    windows = windows.filter((w) => !w.incognito && acceptedWindowStates.has(w.state));
+    if (windows.length === 0) {
+      throw new UserException('There is no normal or maximized window to arrange.');
+    }
+    // Determine the available work area as the union of the displays' work areas.
+    // TODO: Revisit this decision.
+    const displays = await new Promise((resolve, reject) => {
+      chrome.system.display.getInfo((info) => {
+        if (chrome.runtime.lastError) {
+          reject(new UserException(`Could not read display info: ${chrome.runtime.lastError.message}`));
+        } else {
+          resolve(info);
+        }
+      });
+    });
+    if (displays.length === 0) {
+      throw new UserException('No displays were found.');
+    }
+    const area = displays.reduce((acc, d) => {
+      const rect = d.workArea;
+      return {
+        left: Math.min(acc.left, rect.left),
+        top: Math.min(acc.top, rect.top),
+        right: Math.max(acc.right, rect.left + rect.width),
+        bottom: Math.max(acc.bottom, rect.top + rect.height),
+      };
+    }, { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity });
+    const n = windows.length;
+    // Candidate layouts for this window count (hand-tuned, or near-square grids).
+    const layouts = ARRANGE_LAYOUTS[n] ? ARRANGE_LAYOUTS[n] : defaultArrangeLayouts(n);
+    const computedLayouts = layouts.map((spec) => computeArrangeLayout(spec, n, area));
+    // Detect which layout is already active (if any) by matching window positions.
+    let currentLayout = -1;
+    for (let i = 0; i < computedLayouts.length; i++) {
+      if (arrangeLayoutMatches(computedLayouts[i], windows)) {
+        currentLayout = i;
+        break;
+      }
+    }
+    // Apply the next layout in the cycle (layout 0 when none matched).
+    const layoutIndex = (currentLayout + 1) % computedLayouts.length;
+    const rects = computedLayouts[layoutIndex];
+
+    // Remember the focused window so it can be re-focused after moving everything.
+    const lastFocusedWindow = await chrome.windows.getLastFocused({ windowTypes: ['normal'] });
+    const lastFocusedId = lastFocusedWindow ? lastFocusedWindow.id : null;
+    // For cascades, move the focused window to the head of the pile: it becomes the
+    // top-left card, fully visible, and is brought on top by the final re-focus.
+    let ordered = windows;
+    if (layouts[layoutIndex].type === 'cascade') {
+      const fi = windows.findIndex((w) => w.id === lastFocusedId);
+      if (fi > 0) {
+        ordered = [windows[fi], ...windows.slice(0, fi), ...windows.slice(fi + 1)];
+      }
+    }
+    for (let i = 0; i < n; i++) {
+      const w = ordered[i];
+      // Maximized windows must be restored before their bounds can be set.
+      if (w.state === 'maximized') {
+        await chrome.windows.update(w.id, { state: 'normal' });
+      }
+      await chrome.windows.update(w.id, { ...rects[i] });
+    }
+    if (lastFocusedId && windows.some((w) => w.id === lastFocusedId)) {
+      await chrome.windows.update(lastFocusedId, { focused: true });
+    }
   },
   'moveTab': async (args) => {
     let highlightedTabs = await chrome.tabs.query({ highlighted: true, lastFocusedWindow: true });

@@ -5,7 +5,9 @@
   "manifest_version": 3,
   "permissions": [
     "storage",
-    "tabs"
+    "tabs",
+    "windows",
+    "system.display"
   ],
   "action": {
     "default_title": "Hot Tab",

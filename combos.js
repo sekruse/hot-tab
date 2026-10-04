@@ -232,6 +232,17 @@ const defaultComboDescriptors = function() {
       closePopup: true,
     },
   });
+  // Tile all normal windows; each press cycles to the next layout for the window count.
+  combos.push({
+    sequence: 'aw',
+    descriptor: {
+      method: 'arrangeWindows',
+      argTransformer: function() {
+        return {};
+      },
+      closePopup: true,
+    },
+  });
   combos.push({
     sequence: 'k#',
     descriptor: {

@@ -10,7 +10,7 @@ const background = new Client([
   'getState', 'setActiveLayerId',
   'getPin', 'listPins', 'getActiveKey', 'pinTab',
   'focusTab', 'focusNeighborTab', 'closeTab', 'closeTabs', 'closeUnpinnedTabs',
-  'highlight', 'moveTab', 'moveWindows',
+  'highlight', 'moveTab', 'moveWindows', 'arrangeWindows',
   'clearLayer', 'removePin',
   'updatePin',
   'toggleTabPinned',
